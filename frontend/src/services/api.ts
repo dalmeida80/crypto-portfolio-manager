@@ -34,6 +34,31 @@ export interface PricesResponse {
   timestamp: string;
 }
 
+export interface ApiKey {
+  id: string;
+  exchange: string;
+  label?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface ImportResult {
+  success: boolean;
+  imported: number;
+  skipped: number;
+  errors: number;
+  message: string;
+}
+
+export interface ImportStatus {
+  totalTrades: number;
+  binanceTrades: number;
+  manualTrades: number;
+  lastImportDate: string | null;
+  oldestTrade: string | null;
+  newestTrade: string | null;
+}
+
 class ApiService {
   private api: AxiosInstance;
 
@@ -177,6 +202,50 @@ class ApiService {
 
   async getPortfolioHoldings(portfolioId: string): Promise<Holding[]> {
     const { data } = await this.api.get<Holding[]>(`/prices/portfolio/${portfolioId}/holdings`);
+    return data;
+  }
+
+  // Binance API Key methods
+  async addApiKey(apiKey: string, apiSecret: string, label?: string): Promise<{ message: string; apiKey: ApiKey }> {
+    const { data } = await this.api.post('/exchange/api-keys', { apiKey, apiSecret, label });
+    return data;
+  }
+
+  async listApiKeys(): Promise<{ apiKeys: ApiKey[] }> {
+    const { data } = await this.api.get('/exchange/api-keys');
+    return data;
+  }
+
+  async deleteApiKey(id: string): Promise<{ message: string }> {
+    const { data } = await this.api.delete(`/exchange/api-keys/${id}`);
+    return data;
+  }
+
+  // Trade Import methods
+  async importTrades(
+    portfolioId: string,
+    apiKeyId: string,
+    startDate?: string
+  ): Promise<ImportResult> {
+    const { data } = await this.api.post(`/exchange/portfolios/${portfolioId}/import`, {
+      apiKeyId,
+      startDate
+    });
+    return data;
+  }
+
+  async importAllTrades(
+    portfolioId: string,
+    startDate?: string
+  ): Promise<ImportResult> {
+    const { data } = await this.api.post(`/exchange/portfolios/${portfolioId}/import-all`, {
+      startDate
+    });
+    return data;
+  }
+
+  async getImportStatus(portfolioId: string): Promise<ImportStatus> {
+    const { data } = await this.api.get(`/exchange/portfolios/${portfolioId}/import-status`);
     return data;
   }
 }
