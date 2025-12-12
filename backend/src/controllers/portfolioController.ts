@@ -26,10 +26,7 @@ export const createPortfolio = async (req: AuthRequest, res: Response): Promise<
 
     await portfolioRepo.save(portfolio);
 
-    res.status(201).json({
-      message: 'Portfolio created successfully',
-      portfolio,
-    });
+    res.status(201).json(portfolio);
   } catch (error) {
     console.error('Create portfolio error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -47,7 +44,7 @@ export const listPortfolios = async (req: AuthRequest, res: Response): Promise<v
       order: { createdAt: 'DESC' },
     });
 
-    res.json({ portfolios });
+    res.json(portfolios);
   } catch (error) {
     console.error('List portfolios error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -70,7 +67,7 @@ export const getPortfolio = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    res.json({ portfolio });
+    res.json(portfolio);
   } catch (error) {
     console.error('Get portfolio error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -98,10 +95,7 @@ export const updatePortfolio = async (req: AuthRequest, res: Response): Promise<
 
     await portfolioRepo.save(portfolio);
 
-    res.json({
-      message: 'Portfolio updated successfully',
-      portfolio,
-    });
+    res.json(portfolio);
   } catch (error) {
     console.error('Update portfolio error:', error);
     res.status(500).json({ error: 'Internal server error' });
