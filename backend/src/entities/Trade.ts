@@ -19,16 +19,49 @@ export class Trade {
   @Column()
   type!: 'BUY' | 'SELL';
 
-  @Column({ type: 'decimal', precision: 20, scale: 8 })
+  @Column({ 
+    type: 'decimal', 
+    precision: 20, 
+    scale: 8,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value)
+    }
+  })
   quantity!: number;
 
-  @Column({ type: 'decimal', precision: 20, scale: 8 })
+  @Column({ 
+    type: 'decimal', 
+    precision: 20, 
+    scale: 8,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value)
+    }
+  })
   price!: number;
 
-  @Column({ type: 'decimal', precision: 20, scale: 8, default: 0 })
+  @Column({ 
+    type: 'decimal', 
+    precision: 20, 
+    scale: 8, 
+    default: 0,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value)
+    }
+  })
   fee!: number;
 
-  @Column({ type: 'decimal', precision: 20, scale: 8 })
+  @Column({ 
+    type: 'decimal', 
+    precision: 20, 
+    scale: 8,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value)
+    }
+  })
   total!: number;
 
   @Column({ type: 'timestamp' })
