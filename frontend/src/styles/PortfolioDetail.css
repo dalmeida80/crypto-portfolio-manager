@@ -2,6 +2,18 @@
   width: 100%;
 }
 
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 30px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
 .btn-back {
   background: transparent;
   border: 1px solid #ddd;
@@ -12,6 +24,31 @@
 
 .btn-back:hover {
   background-color: #f5f5f5;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.3s;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #5a6268;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.stat-value .percentage {
+  font-size: 0.8em;
+  opacity: 0.8;
 }
 
 .trade-form-card {
@@ -35,6 +72,90 @@
   margin-bottom: 20px;
 }
 
+/* Holdings Section */
+.holdings-section {
+  margin-top: 40px;
+  margin-bottom: 40px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-header h2 {
+  font-size: 24px;
+  color: #2c3e50;
+  margin: 0;
+}
+
+.btn-small {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+.holdings-table {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.holdings-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.holdings-table thead {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.holdings-table th,
+.holdings-table td {
+  padding: 15px;
+  text-align: left;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.holdings-table th {
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.holdings-table td {
+  font-size: 14px;
+  color: #333;
+}
+
+.holdings-table .current-price {
+  font-weight: 600;
+  color: #667eea;
+}
+
+.holdings-table .positive {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.holdings-table .negative {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+.holdings-table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.holdings-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Trades Section */
 .trades-section {
   margin-top: 40px;
 }
@@ -89,14 +210,30 @@
 }
 
 @media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+  }
+
+  .header-actions {
+    margin-top: 15px;
+    width: 100%;
+  }
+
+  .header-actions button,
+  .header-actions a {
+    flex: 1;
+  }
+
   .form-row {
     grid-template-columns: 1fr;
   }
 
+  .holdings-table,
   .trades-table {
     overflow-x: auto;
   }
 
+  .holdings-table table,
   .trades-table table {
     min-width: 800px;
   }
