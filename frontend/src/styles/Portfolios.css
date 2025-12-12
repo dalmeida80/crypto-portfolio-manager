@@ -1,0 +1,68 @@
+.portfolios-page {
+  width: 100%;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.page-header h1 {
+  font-size: 32px;
+  color: #2c3e50;
+}
+
+.create-form-card {
+  background: white;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px;
+}
+
+.create-form-card h2 {
+  font-size: 20px;
+  margin-bottom: 20px;
+  color: #2c3e50;
+}
+
+.create-form-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.portfolios-list {
+  margin-top: 30px;
+}
+
+.portfolio-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.portfolio-card .stat {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.portfolio-card .stat:last-child {
+  border-bottom: none;
+  margin-bottom: 15px;
+}
+
+.portfolio-card .stat .label {
+  font-size: 14px;
+  color: #666;
+}
+
+.portfolio-card .stat .value {
+  font-weight: 600;
+  font-size: 14px;
+}
