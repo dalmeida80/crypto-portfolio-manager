@@ -50,7 +50,7 @@ const Portfolios: React.FC = () => {
     }
   };
 
-  const handleDeletePortfolio = async (id: number) => {
+  const handleDeletePortfolio = async (id: string) => {
     if (!confirm('Are you sure you want to delete this portfolio?')) {
       return;
     }
