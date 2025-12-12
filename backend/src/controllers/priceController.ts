@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PriceService } from '../services/priceService';
 import { PortfolioUpdateService } from '../services/portfolioUpdateService';
+import { AuthRequest } from '../middleware/auth';
 
 const priceService = PriceService.getInstance();
 const portfolioUpdateService = new PortfolioUpdateService();
@@ -55,10 +56,14 @@ export const getPrices = async (req: Request, res: Response) => {
 /**
  * Refresh portfolio values with current prices
  */
-export const refreshPortfolio = async (req: Request, res: Response) => {
+export const refreshPortfolio = async (req: AuthRequest, res: Response) => {
   try {
     const { portfolioId } = req.params;
-    const userId = (req as any).user.id;
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
 
     // Update portfolio
     const portfolio = await portfolioUpdateService.updatePortfolio(portfolioId);
@@ -78,10 +83,14 @@ export const refreshPortfolio = async (req: Request, res: Response) => {
 /**
  * Get detailed holdings for a portfolio
  */
-export const getPortfolioHoldings = async (req: Request, res: Response) => {
+export const getPortfolioHoldings = async (req: AuthRequest, res: Response) => {
   try {
     const { portfolioId } = req.params;
-    const userId = (req as any).user.id;
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
 
     // Get holdings
     const holdings = await portfolioUpdateService.getPortfolioHoldings(portfolioId);
@@ -96,9 +105,13 @@ export const getPortfolioHoldings = async (req: Request, res: Response) => {
 /**
  * Refresh all portfolios for current user
  */
-export const refreshUserPortfolios = async (req: Request, res: Response) => {
+export const refreshUserPortfolios = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
 
     const portfolios = await portfolioUpdateService.updateUserPortfolios(userId);
 
