@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticateToken } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 import {
   getPrice,
   getPrices,
@@ -18,9 +18,9 @@ router.post('/prices', getPrices);
 router.get('/cache/stats', getCacheStats);
 
 // Protected routes (require authentication)
-router.post('/portfolio/:portfolioId/refresh', authenticateToken, refreshPortfolio);
-router.get('/portfolio/:portfolioId/holdings', authenticateToken, getPortfolioHoldings);
-router.post('/portfolios/refresh', authenticateToken, refreshUserPortfolios);
-router.post('/cache/clear', authenticateToken, clearCache);
+router.post('/portfolio/:portfolioId/refresh', authenticate, refreshPortfolio);
+router.get('/portfolio/:portfolioId/holdings', authenticate, getPortfolioHoldings);
+router.post('/portfolios/refresh', authenticate, refreshUserPortfolios);
+router.post('/cache/clear', authenticate, clearCache);
 
 export default router;
