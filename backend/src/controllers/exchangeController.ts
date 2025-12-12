@@ -4,6 +4,9 @@ import { ExchangeApiKey } from '../entities/ExchangeApiKey';
 import { AuthRequest } from '../middleware/auth';
 import { encrypt } from '../utils/encryption';
 import { BinanceService } from '../services/binanceService';
+import { TradeImportService } from '../services/tradeImportService';
+
+const tradeImportService = new TradeImportService();
 
 export const addApiKey = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -74,6 +77,27 @@ export const listApiKeys = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
+export const deleteApiKey = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const { id } = req.params;
+
+    const exchangeApiKeyRepo = AppDataSource.getRepository(ExchangeApiKey);
+    const apiKey = await exchangeApiKeyRepo.findOne({ where: { id, userId } });
+
+    if (!apiKey) {
+      res.status(404).json({ error: 'API key not found' });
+      return;
+    }
+
+    await exchangeApiKeyRepo.remove(apiKey);
+    res.json({ message: 'API key deleted successfully' });
+  } catch (error) {
+    console.error('Delete API key error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 export const getBalances = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.userId;
@@ -94,5 +118,102 @@ export const getBalances = async (req: AuthRequest, res: Response): Promise<void
   } catch (error) {
     console.error('Get balances error:', error);
     res.status(500).json({ error: 'Failed to fetch balances' });
+  }
+};
+
+/**
+ * Import trades from Binance for a portfolio
+ */
+export const importTrades = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const { portfolioId } = req.params;
+    const { apiKeyId, startDate } = req.body;
+
+    let parsedStartDate: Date | undefined;
+    if (startDate) {
+      parsedStartDate = new Date(startDate);
+      if (isNaN(parsedStartDate.getTime())) {
+        res.status(400).json({ error: 'Invalid start date format' });
+        return;
+      }
+    }
+
+    const result = await tradeImportService.importTrades(
+      portfolioId,
+      apiKeyId,
+      userId,
+      parsedStartDate
+    );
+
+    if (!result.success) {
+      res.status(400).json(result);
+      return;
+    }
+
+    res.json(result);
+  } catch (error: any) {
+    console.error('Import trades error:', error);
+    res.status(500).json({ 
+      error: 'Failed to import trades',
+      message: error.message 
+    });
+  }
+};
+
+/**
+ * Import trades from all API keys for a portfolio
+ */
+export const importAllTrades = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const { portfolioId } = req.params;
+    const { startDate } = req.body;
+
+    let parsedStartDate: Date | undefined;
+    if (startDate) {
+      parsedStartDate = new Date(startDate);
+      if (isNaN(parsedStartDate.getTime())) {
+        res.status(400).json({ error: 'Invalid start date format' });
+        return;
+      }
+    }
+
+    const result = await tradeImportService.importFromAllSources(
+      portfolioId,
+      userId,
+      parsedStartDate
+    );
+
+    if (!result.success) {
+      res.status(400).json(result);
+      return;
+    }
+
+    res.json(result);
+  } catch (error: any) {
+    console.error('Import all trades error:', error);
+    res.status(500).json({ 
+      error: 'Failed to import trades',
+      message: error.message 
+    });
+  }
+};
+
+/**
+ * Get import status for a portfolio
+ */
+export const getImportStatus = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { portfolioId } = req.params;
+
+    const status = await tradeImportService.getImportStatus(portfolioId);
+    res.json(status);
+  } catch (error: any) {
+    console.error('Get import status error:', error);
+    res.status(500).json({ 
+      error: 'Failed to get import status',
+      message: error.message 
+    });
   }
 };
