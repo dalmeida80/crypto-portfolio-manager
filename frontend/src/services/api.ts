@@ -12,6 +12,28 @@ import {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
+export interface Holding {
+  symbol: string;
+  quantity: number;
+  averagePrice: number;
+  currentPrice: number;
+  totalInvested: number;
+  currentValue: number;
+  profitLoss: number;
+  profitLossPercentage: number;
+}
+
+export interface PriceResponse {
+  symbol: string;
+  price: number;
+  timestamp: string;
+}
+
+export interface PricesResponse {
+  prices: { [symbol: string]: number };
+  timestamp: string;
+}
+
 class ApiService {
   private api: AxiosInstance;
 
@@ -92,7 +114,7 @@ class ApiService {
     return data;
   }
 
-  async getPortfolio(id: number): Promise<Portfolio> {
+  async getPortfolio(id: string): Promise<Portfolio> {
     const { data } = await this.api.get<Portfolio>(`/portfolios/${id}`);
     return data;
   }
@@ -102,17 +124,17 @@ class ApiService {
     return data;
   }
 
-  async updatePortfolio(id: number, portfolio: Partial<CreatePortfolioDto>): Promise<Portfolio> {
+  async updatePortfolio(id: string, portfolio: Partial<CreatePortfolioDto>): Promise<Portfolio> {
     const { data } = await this.api.put<Portfolio>(`/portfolios/${id}`, portfolio);
     return data;
   }
 
-  async deletePortfolio(id: number): Promise<void> {
+  async deletePortfolio(id: string): Promise<void> {
     await this.api.delete(`/portfolios/${id}`);
   }
 
   // Trade methods
-  async getTrades(portfolioId: number): Promise<Trade[]> {
+  async getTrades(portfolioId: string): Promise<Trade[]> {
     const { data } = await this.api.get<Trade[]>(`/portfolios/${portfolioId}/trades`);
     return data;
   }
@@ -129,6 +151,33 @@ class ApiService {
 
   async deleteTrade(id: number): Promise<void> {
     await this.api.delete(`/trades/${id}`);
+  }
+
+  // Price methods
+  async getPrice(symbol: string): Promise<PriceResponse> {
+    const { data } = await this.api.get<PriceResponse>(`/prices/price/${symbol}`);
+    return data;
+  }
+
+  async getPrices(symbols: string[]): Promise<PricesResponse> {
+    const { data } = await this.api.post<PricesResponse>('/prices/prices', { symbols });
+    return data;
+  }
+
+  // Portfolio update methods
+  async refreshPortfolio(portfolioId: string): Promise<Portfolio> {
+    const { data } = await this.api.post<Portfolio>(`/prices/portfolio/${portfolioId}/refresh`);
+    return data;
+  }
+
+  async refreshAllPortfolios(): Promise<{ updated: number; portfolios: Portfolio[] }> {
+    const { data } = await this.api.post('/prices/portfolios/refresh');
+    return data;
+  }
+
+  async getPortfolioHoldings(portfolioId: string): Promise<Holding[]> {
+    const { data } = await this.api.get<Holding[]>(`/prices/portfolio/${portfolioId}/holdings`);
+    return data;
   }
 }
 
