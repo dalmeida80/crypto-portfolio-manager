@@ -1,0 +1,64 @@
+version: '3.9'
+
+services:
+  backend:
+    build: ./backend
+    container_name: crypto-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    ports:
+      - '4000:4000'
+    depends_on:
+      - db
+    networks:
+      - crypto-net
+
+  frontend:
+    build: ./frontend
+    container_name: crypto-frontend
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    depends_on:
+      - backend
+    networks:
+      - crypto-net
+
+  db:
+    image: postgres:16-alpine
+    container_name: crypto-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: crypto_user
+      POSTGRES_PASSWORD: crypto_password
+      POSTGRES_DB: crypto_portfolio
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    networks:
+      - crypto-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: crypto-nginx
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - crypto-net
+
+volumes:
+  db_data:
+
+networks:
+  crypto-net:
+    driver: bridge
