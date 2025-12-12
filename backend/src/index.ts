@@ -10,6 +10,7 @@ import { Portfolio } from './entities/Portfolio';
 import { Trade } from './entities/Trade';
 import authRoutes from './routes/authRoutes';
 import exchangeRoutes from './routes/exchangeRoutes';
+import portfolioRoutes from './routes/portfolioRoutes';
 
 dotenv.config();
 
@@ -40,6 +41,7 @@ AppDataSource.initialize()
 
     app.use('/api/auth', authRoutes);
     app.use('/api/exchange', exchangeRoutes);
+    app.use('/api/portfolios', portfolioRoutes);
 
     const port = process.env.PORT || 4000;
     app.listen(port, () => {

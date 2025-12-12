@@ -1,0 +1,139 @@
+import { AppDataSource } from '../index';
+import { Portfolio } from '../entities/Portfolio';
+import { Trade } from '../entities/Trade';
+import { BinanceService } from './binanceService';
+import { ExchangeApiKey } from '../entities/ExchangeApiKey';
+
+interface HoldingAnalytics {
+  symbol: string;
+  totalQuantity: number;
+  averageBuyPrice: number;
+  totalInvested: number;
+  currentPrice: number;
+  currentValue: number;
+  profitLoss: number;
+  profitLossPercent: number;
+}
+
+export class AnalyticsService {
+  static async calculatePortfolioMetrics(
+    portfolioId: string,
+    userId: string,
+    apiKeyId?: string
+  ): Promise<any> {
+    try {
+      const portfolioRepo = AppDataSource.getRepository(Portfolio);
+      const portfolio = await portfolioRepo.findOne({
+        where: { id: portfolioId, userId },
+        relations: ['trades'],
+      });
+
+      if (!portfolio) {
+        throw new Error('Portfolio not found');
+      }
+
+      const holdings = this.calculateHoldings(portfolio.trades);
+      
+      // Get current prices if API key provided
+      let enrichedHoldings: HoldingAnalytics[] = [];
+      let totalInvested = 0;
+      let totalCurrentValue = 0;
+
+      if (apiKeyId) {
+        const apiKeyRepo = AppDataSource.getRepository(ExchangeApiKey);
+        const apiKey = await apiKeyRepo.findOne({
+          where: { id: apiKeyId, userId },
+        });
+
+        if (apiKey) {
+          const binance = await BinanceService.createFromApiKey(apiKey);
+
+          for (const [symbol, data] of Object.entries(holdings)) {
+            try {
+              const currentPrice = await binance.getCurrentPrice(symbol);
+              const currentValue = data.quantity * currentPrice;
+              const profitLoss = currentValue - data.totalCost;
+              const profitLossPercent = (profitLoss / data.totalCost) * 100;
+
+              enrichedHoldings.push({
+                symbol,
+                totalQuantity: data.quantity,
+                averageBuyPrice: data.averagePrice,
+                totalInvested: data.totalCost,
+                currentPrice,
+                currentValue,
+                profitLoss,
+                profitLossPercent,
+              });
+
+              totalInvested += data.totalCost;
+              totalCurrentValue += currentValue;
+            } catch (error) {
+              console.error(`Failed to get price for ${symbol}:`, error);
+            }
+          }
+        }
+      }
+
+      const totalProfitLoss = totalCurrentValue - totalInvested;
+      const totalProfitLossPercent = totalInvested > 0 ? (totalProfitLoss / totalInvested) * 100 : 0;
+
+      // Update portfolio totals
+      portfolio.totalInvested = totalInvested;
+      portfolio.currentValue = totalCurrentValue;
+      portfolio.profitLoss = totalProfitLoss;
+      await portfolioRepo.save(portfolio);
+
+      return {
+        portfolio: {
+          id: portfolio.id,
+          name: portfolio.name,
+          totalInvested,
+          currentValue: totalCurrentValue,
+          profitLoss: totalProfitLoss,
+          profitLossPercent: totalProfitLossPercent,
+        },
+        holdings: enrichedHoldings,
+        totalTrades: portfolio.trades.length,
+      };
+    } catch (error) {
+      throw new Error(`Analytics calculation failed: ${error}`);
+    }
+  }
+
+  private static calculateHoldings(trades: Trade[]): Record<string, any> {
+    const holdings: Record<string, any> = {};
+
+    for (const trade of trades) {
+      if (!holdings[trade.symbol]) {
+        holdings[trade.symbol] = {
+          quantity: 0,
+          totalCost: 0,
+          averagePrice: 0,
+        };
+      }
+
+      if (trade.type === 'BUY') {
+        holdings[trade.symbol].quantity += trade.quantity;
+        holdings[trade.symbol].totalCost += trade.total + trade.fee;
+      } else if (trade.type === 'SELL') {
+        holdings[trade.symbol].quantity -= trade.quantity;
+        holdings[trade.symbol].totalCost -= trade.total - trade.fee;
+      }
+
+      if (holdings[trade.symbol].quantity > 0) {
+        holdings[trade.symbol].averagePrice = 
+          holdings[trade.symbol].totalCost / holdings[trade.symbol].quantity;
+      }
+    }
+
+    // Remove zero holdings
+    for (const symbol in holdings) {
+      if (holdings[symbol].quantity <= 0) {
+        delete holdings[symbol];
+      }
+    }
+
+    return holdings;
+  }
+}
