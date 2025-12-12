@@ -25,6 +25,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="navbar-menu">
           <Link to="/dashboard" className="navbar-item">Dashboard</Link>
           <Link to="/portfolios" className="navbar-item">Portfolios</Link>
+          <Link to="/settings" className="navbar-item">Settings</Link>
           <div className="navbar-user">
             <span>{user?.name}</span>
             <button onClick={handleLogout} className="btn btn-secondary">Logout</button>
