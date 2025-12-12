@@ -4,6 +4,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { DataSource } from 'typeorm';
+import { User } from './entities/User';
+import authRoutes from './routes/authRoutes';
 
 dotenv.config();
 
@@ -12,7 +14,7 @@ app.use(express.json());
 app.use(cors());
 app.use(helmet());
 
-const AppDataSource = new DataSource({
+export const AppDataSource = new DataSource({
   type: 'postgres',
   host: process.env.DB_HOST,
   port: Number(process.env.DB_PORT) || 5432,
@@ -21,16 +23,20 @@ const AppDataSource = new DataSource({
   database: process.env.DB_NAME,
   synchronize: true,
   logging: false,
-  entities: [],
+  entities: [User],
 });
 
 AppDataSource.initialize()
   .then(() => {
     console.log('Database connected');
 
+    // Health check
     app.get('/api/health', (_req, res) => {
       res.json({ status: 'ok' });
     });
+
+    // Auth routes
+    app.use('/api/auth', authRoutes);
 
     const port = process.env.PORT || 4000;
     app.listen(port, () => {
