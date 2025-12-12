@@ -20,13 +20,40 @@ export class Portfolio {
   @Column({ type: 'text', nullable: true })
   description?: string;
 
-  @Column({ type: 'decimal', precision: 20, scale: 8, default: 0 })
+  @Column({ 
+    type: 'decimal', 
+    precision: 20, 
+    scale: 8, 
+    default: 0,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value)
+    }
+  })
   totalInvested!: number;
 
-  @Column({ type: 'decimal', precision: 20, scale: 8, default: 0 })
+  @Column({ 
+    type: 'decimal', 
+    precision: 20, 
+    scale: 8, 
+    default: 0,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value)
+    }
+  })
   currentValue!: number;
 
-  @Column({ type: 'decimal', precision: 20, scale: 8, default: 0 })
+  @Column({ 
+    type: 'decimal', 
+    precision: 20, 
+    scale: 8, 
+    default: 0,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value)
+    }
+  })
   profitLoss!: number;
 
   @OneToMany(() => Trade, trade => trade.portfolio)
