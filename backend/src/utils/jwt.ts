@@ -1,4 +1,4 @@
-import * as jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 
 interface TokenPayload {
   userId: string;
@@ -18,13 +18,19 @@ const getJwtRefreshSecret = (): string => {
 };
 
 export const generateAccessToken = (payload: TokenPayload): string => {
-  const expiresIn: string | number = process.env.JWT_EXPIRES_IN || '15m';
-  return jwt.sign(payload, getJwtSecret(), { expiresIn });
+  return jwt.sign(
+    payload,
+    getJwtSecret(),
+    { expiresIn: process.env.JWT_EXPIRES_IN || '15m' } as jwt.SignOptions
+  );
 };
 
 export const generateRefreshToken = (payload: TokenPayload): string => {
-  const expiresIn: string | number = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
-  return jwt.sign(payload, getJwtRefreshSecret(), { expiresIn });
+  return jwt.sign(
+    payload,
+    getJwtRefreshSecret(),
+    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' } as jwt.SignOptions
+  );
 };
 
 export const verifyAccessToken = (token: string): TokenPayload => {
