@@ -8,6 +8,7 @@ import '../styles/Dashboard.css';
 const Dashboard: React.FC = () => {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -29,6 +30,20 @@ const Dashboard: React.FC = () => {
       setPortfolios([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefreshAll = async () => {
+    try {
+      setRefreshing(true);
+      setError('');
+      const result = await apiService.refreshAllPortfolios();
+      setPortfolios(result.portfolios);
+    } catch (err: any) {
+      console.error('Error refreshing portfolios:', err);
+      setError('Failed to refresh prices');
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -63,7 +78,16 @@ const Dashboard: React.FC = () => {
       <div className="dashboard">
         <div className="dashboard-header">
           <h1>Dashboard</h1>
-          <Link to="/portfolios" className="btn btn-primary">Manage Portfolios</Link>
+          <div className="header-actions">
+            <button 
+              onClick={handleRefreshAll} 
+              className="btn btn-secondary"
+              disabled={refreshing || portfolios.length === 0}
+            >
+              {refreshing ? '🔄 Refreshing...' : '🔄 Refresh All Prices'}
+            </button>
+            <Link to="/portfolios" className="btn btn-primary">Manage Portfolios</Link>
+          </div>
         </div>
 
         {error && (
@@ -104,32 +128,41 @@ const Dashboard: React.FC = () => {
             </div>
           ) : (
             <div className="portfolio-grid">
-              {portfolios.map((portfolio) => (
-                <Link
-                  key={portfolio.id}
-                  to={`/portfolios/${portfolio.id}`}
-                  className="portfolio-card"
-                >
-                  <h3>{portfolio.name}</h3>
-                  {portfolio.description && <p className="description">{portfolio.description}</p>}
-                  <div className="portfolio-stats">
-                    <div>
-                      <span className="label">Invested:</span>
-                      <span className="value">${(portfolio.totalInvested || 0).toFixed(2)}</span>
+              {portfolios.map((portfolio) => {
+                const portfolioPL = portfolio.profitLoss || 0;
+                const portfolioInvested = portfolio.totalInvested || 0;
+                const portfolioPLPercent = portfolioInvested > 0 
+                  ? ((portfolioPL / portfolioInvested) * 100).toFixed(2)
+                  : '0.00';
+
+                return (
+                  <Link
+                    key={portfolio.id}
+                    to={`/portfolios/${portfolio.id}`}
+                    className="portfolio-card"
+                  >
+                    <h3>{portfolio.name}</h3>
+                    {portfolio.description && <p className="description">{portfolio.description}</p>}
+                    <div className="portfolio-stats">
+                      <div>
+                        <span className="label">Invested:</span>
+                        <span className="value">${portfolioInvested.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="label">Value:</span>
+                        <span className="value">${(portfolio.currentValue || 0).toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="label">P/L:</span>
+                        <span className={`value ${portfolioPL >= 0 ? 'positive' : 'negative'}`}>
+                          ${portfolioPL.toFixed(2)}
+                          <span className="percentage-small"> ({portfolioPLPercent}%)</span>
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="label">Value:</span>
-                      <span className="value">${(portfolio.currentValue || 0).toFixed(2)}</span>
-                    </div>
-                    <div>
-                      <span className="label">P/L:</span>
-                      <span className={`value ${(portfolio.profitLoss || 0) >= 0 ? 'positive' : 'negative'}`}>
-                        ${(portfolio.profitLoss || 0).toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>
