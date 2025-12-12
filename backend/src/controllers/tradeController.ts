@@ -39,10 +39,7 @@ export const addTrade = async (req: AuthRequest, res: Response): Promise<void> =
 
     await tradeRepo.save(trade);
 
-    res.status(201).json({
-      message: 'Trade added successfully',
-      trade,
-    });
+    res.status(201).json(trade);
   } catch (error) {
     console.error('Add trade error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -70,7 +67,7 @@ export const listTrades = async (req: AuthRequest, res: Response): Promise<void>
       order: { executedAt: 'DESC' },
     });
 
-    res.json({ trades });
+    res.json(trades);
   } catch (error) {
     console.error('List trades error:', error);
     res.status(500).json({ error: 'Internal server error' });
