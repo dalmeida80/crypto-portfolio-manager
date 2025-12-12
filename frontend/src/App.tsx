@@ -7,6 +7,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Portfolios from './pages/Portfolios';
 import PortfolioDetail from './pages/PortfolioDetail';
+import Settings from './pages/Settings';
 
 const App: React.FC = () => {
   return (
@@ -36,6 +37,14 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <PortfolioDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
               </ProtectedRoute>
             }
           />
