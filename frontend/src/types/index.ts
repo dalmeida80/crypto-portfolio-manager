@@ -1,6 +1,6 @@
 // User types
 export interface User {
-  id: number;
+  id: string;
   email: string;
   name: string;
   createdAt: string;
@@ -26,8 +26,8 @@ export interface RegisterCredentials {
 
 // Portfolio types
 export interface Portfolio {
-  id: number;
-  userId: number;
+  id: string;
+  userId: string;
   name: string;
   description?: string;
   totalInvested: number;
@@ -42,7 +42,7 @@ export type TradeType = 'BUY' | 'SELL';
 
 export interface Trade {
   id: number;
-  portfolioId: number;
+  portfolioId: string;
   symbol: string;
   type: TradeType;
   quantity: number;
@@ -56,7 +56,7 @@ export interface Trade {
 }
 
 export interface CreateTradeDto {
-  portfolioId: number;
+  portfolioId: string;
   symbol: string;
   type: TradeType;
   quantity: number;
