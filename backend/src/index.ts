@@ -5,7 +5,11 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { DataSource } from 'typeorm';
 import { User } from './entities/User';
+import { ExchangeApiKey } from './entities/ExchangeApiKey';
+import { Portfolio } from './entities/Portfolio';
+import { Trade } from './entities/Trade';
 import authRoutes from './routes/authRoutes';
+import exchangeRoutes from './routes/exchangeRoutes';
 
 dotenv.config();
 
@@ -23,20 +27,19 @@ export const AppDataSource = new DataSource({
   database: process.env.DB_NAME,
   synchronize: true,
   logging: false,
-  entities: [User],
+  entities: [User, ExchangeApiKey, Portfolio, Trade],
 });
 
 AppDataSource.initialize()
   .then(() => {
     console.log('Database connected');
 
-    // Health check
     app.get('/api/health', (_req, res) => {
       res.json({ status: 'ok' });
     });
 
-    // Auth routes
     app.use('/api/auth', authRoutes);
+    app.use('/api/exchange', exchangeRoutes);
 
     const port = process.env.PORT || 4000;
     app.listen(port, () => {
