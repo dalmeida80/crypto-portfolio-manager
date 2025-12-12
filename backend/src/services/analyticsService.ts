@@ -78,20 +78,20 @@ export class AnalyticsService {
       const totalProfitLoss = totalCurrentValue - totalInvested;
       const totalProfitLossPercent = totalInvested > 0 ? (totalProfitLoss / totalInvested) * 100 : 0;
 
-      // Update portfolio totals
-      portfolio.totalInvested = totalInvested;
-      portfolio.currentValue = totalCurrentValue;
-      portfolio.profitLoss = totalProfitLoss;
+      // Update portfolio totals - convert to string for PostgreSQL decimal type
+      portfolio.totalInvested = parseFloat(totalInvested.toFixed(8)) as any;
+      portfolio.currentValue = parseFloat(totalCurrentValue.toFixed(8)) as any;
+      portfolio.profitLoss = parseFloat(totalProfitLoss.toFixed(8)) as any;
       await portfolioRepo.save(portfolio);
 
       return {
         portfolio: {
           id: portfolio.id,
           name: portfolio.name,
-          totalInvested,
-          currentValue: totalCurrentValue,
-          profitLoss: totalProfitLoss,
-          profitLossPercent: totalProfitLossPercent,
+          totalInvested: parseFloat(totalInvested.toFixed(8)),
+          currentValue: parseFloat(totalCurrentValue.toFixed(8)),
+          profitLoss: parseFloat(totalProfitLoss.toFixed(8)),
+          profitLossPercent: parseFloat(totalProfitLossPercent.toFixed(2)),
         },
         holdings: enrichedHoldings,
         totalTrades: portfolio.trades.length,
@@ -105,6 +105,11 @@ export class AnalyticsService {
     const holdings: Record<string, any> = {};
 
     for (const trade of trades) {
+      // Convert string decimals to numbers for calculations
+      const quantity = typeof trade.quantity === 'string' ? parseFloat(trade.quantity) : trade.quantity;
+      const total = typeof trade.total === 'string' ? parseFloat(trade.total) : trade.total;
+      const fee = typeof trade.fee === 'string' ? parseFloat(trade.fee) : trade.fee;
+
       if (!holdings[trade.symbol]) {
         holdings[trade.symbol] = {
           quantity: 0,
@@ -114,11 +119,11 @@ export class AnalyticsService {
       }
 
       if (trade.type === 'BUY') {
-        holdings[trade.symbol].quantity += trade.quantity;
-        holdings[trade.symbol].totalCost += trade.total + trade.fee;
+        holdings[trade.symbol].quantity += quantity;
+        holdings[trade.symbol].totalCost += total + fee;
       } else if (trade.type === 'SELL') {
-        holdings[trade.symbol].quantity -= trade.quantity;
-        holdings[trade.symbol].totalCost -= trade.total - trade.fee;
+        holdings[trade.symbol].quantity -= quantity;
+        holdings[trade.symbol].totalCost -= total - fee;
       }
 
       if (holdings[trade.symbol].quantity > 0) {
