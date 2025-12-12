@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Portfolio, Trade, CreateTradeDto, TradeType } from '../types';
-import apiService from '../services/api';
+import apiService, { Holding } from '../services/api';
 import '../styles/PortfolioDetail.css';
 
 const PortfolioDetail: React.FC = () => {
@@ -10,11 +10,14 @@ const PortfolioDetail: React.FC = () => {
   const navigate = useNavigate();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [holdings, setHoldings] = useState<Holding[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [showTradeForm, setShowTradeForm] = useState(false);
+  const [showHoldings, setShowHoldings] = useState(true);
   const [formData, setFormData] = useState<CreateTradeDto>({
-    portfolioId: 0,
+    portfolioId: '',
     symbol: '',
     type: 'BUY',
     quantity: 0,
@@ -25,11 +28,11 @@ const PortfolioDetail: React.FC = () => {
 
   useEffect(() => {
     if (id) {
-      loadPortfolioData(parseInt(id));
+      loadPortfolioData(id);
     }
   }, [id]);
 
-  const loadPortfolioData = async (portfolioId: number) => {
+  const loadPortfolioData = async (portfolioId: string) => {
     try {
       setLoading(true);
       const [portfolioData, tradesData] = await Promise.all([
@@ -39,11 +42,47 @@ const PortfolioDetail: React.FC = () => {
       setPortfolio(portfolioData);
       setTrades(tradesData);
       setFormData((prev) => ({ ...prev, portfolioId }));
+      
+      // Load holdings if there are trades
+      if (tradesData.length > 0) {
+        loadHoldings(portfolioId);
+      }
     } catch (err: any) {
       setError('Failed to load portfolio data');
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadHoldings = async (portfolioId: string) => {
+    try {
+      const holdingsData = await apiService.getPortfolioHoldings(portfolioId);
+      setHoldings(holdingsData);
+    } catch (err: any) {
+      console.error('Failed to load holdings:', err);
+    }
+  };
+
+  const handleRefreshPrices = async () => {
+    if (!id) return;
+    
+    try {
+      setRefreshing(true);
+      setError('');
+      const updatedPortfolio = await apiService.refreshPortfolio(id);
+      setPortfolio(updatedPortfolio);
+      
+      // Reload holdings with new prices
+      await loadHoldings(id);
+      
+      // Success message
+      setError('');
+    } catch (err: any) {
+      setError('Failed to refresh prices');
+      console.error(err);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -55,7 +94,7 @@ const PortfolioDetail: React.FC = () => {
     try {
       await apiService.createTrade(formData);
       setFormData({
-        portfolioId: parseInt(id!),
+        portfolioId: id!,
         symbol: '',
         type: 'BUY',
         quantity: 0,
@@ -63,7 +102,7 @@ const PortfolioDetail: React.FC = () => {
         fee: 0,
       });
       setShowTradeForm(false);
-      await loadPortfolioData(parseInt(id!));
+      await loadPortfolioData(id!);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to create trade');
     } finally {
@@ -78,7 +117,7 @@ const PortfolioDetail: React.FC = () => {
 
     try {
       await apiService.deleteTrade(tradeId);
-      await loadPortfolioData(parseInt(id!));
+      await loadPortfolioData(id!);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to delete trade');
     }
@@ -100,6 +139,10 @@ const PortfolioDetail: React.FC = () => {
     );
   }
 
+  const profitLossPercentage = portfolio.totalInvested > 0 
+    ? (portfolio.profitLoss / portfolio.totalInvested) * 100 
+    : 0;
+
   return (
     <Layout>
       <div className="portfolio-detail">
@@ -111,12 +154,21 @@ const PortfolioDetail: React.FC = () => {
             <h1>{portfolio.name}</h1>
             {portfolio.description && <p className="description">{portfolio.description}</p>}
           </div>
-          <button
-            onClick={() => setShowTradeForm(!showTradeForm)}
-            className="btn btn-primary"
-          >
-            {showTradeForm ? 'Cancel' : 'Add Trade'}
-          </button>
+          <div className="header-actions">
+            <button
+              onClick={handleRefreshPrices}
+              className="btn btn-secondary"
+              disabled={refreshing}
+            >
+              {refreshing ? '🔄 Refreshing...' : '🔄 Refresh Prices'}
+            </button>
+            <button
+              onClick={() => setShowTradeForm(!showTradeForm)}
+              className="btn btn-primary"
+            >
+              {showTradeForm ? 'Cancel' : '+ Add Trade'}
+            </button>
+          </div>
         </div>
 
         {error && <div className="error-message">{error}</div>}
@@ -134,6 +186,9 @@ const PortfolioDetail: React.FC = () => {
             <h3>Profit/Loss</h3>
             <p className={`stat-value ${portfolio.profitLoss >= 0 ? 'positive' : 'negative'}`}>
               ${portfolio.profitLoss.toFixed(2)}
+              <span className="percentage">
+                ({profitLossPercentage >= 0 ? '+' : ''}{profitLossPercentage.toFixed(2)}%)
+              </span>
             </p>
           </div>
         </div>
@@ -210,8 +265,58 @@ const PortfolioDetail: React.FC = () => {
           </div>
         )}
 
+        {holdings.length > 0 && (
+          <div className="holdings-section">
+            <div className="section-header">
+              <h2>Current Holdings</h2>
+              <button 
+                onClick={() => setShowHoldings(!showHoldings)} 
+                className="btn btn-small"
+              >
+                {showHoldings ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {showHoldings && (
+              <div className="holdings-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Asset</th>
+                      <th>Quantity</th>
+                      <th>Avg Price</th>
+                      <th>Current Price</th>
+                      <th>Invested</th>
+                      <th>Current Value</th>
+                      <th>P/L</th>
+                      <th>P/L %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {holdings.map((holding) => (
+                      <tr key={holding.symbol}>
+                        <td><strong>{holding.symbol}</strong></td>
+                        <td>{holding.quantity.toFixed(8)}</td>
+                        <td>${holding.averagePrice.toFixed(2)}</td>
+                        <td className="current-price">${holding.currentPrice.toFixed(2)}</td>
+                        <td>${holding.totalInvested.toFixed(2)}</td>
+                        <td>${holding.currentValue.toFixed(2)}</td>
+                        <td className={holding.profitLoss >= 0 ? 'positive' : 'negative'}>
+                          ${holding.profitLoss.toFixed(2)}
+                        </td>
+                        <td className={holding.profitLossPercentage >= 0 ? 'positive' : 'negative'}>
+                          {holding.profitLossPercentage >= 0 ? '+' : ''}{holding.profitLossPercentage.toFixed(2)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="trades-section">
-          <h2>Trades</h2>
+          <h2>Trade History</h2>
           {trades.length === 0 ? (
             <div className="empty-state">
               <p>No trades yet. Add your first trade to get started!</p>
