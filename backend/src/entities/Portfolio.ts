@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { User } from './User';
 import { Trade } from './Trade';
+import { Transfer } from './Transfer';
 
 @Entity('portfolios')
 export class Portfolio {
@@ -58,6 +59,9 @@ export class Portfolio {
 
   @OneToMany(() => Trade, trade => trade.portfolio)
   trades!: Trade[];
+
+  @OneToMany(() => Transfer, transfer => transfer.portfolio)
+  transfers!: Transfer[];
 
   @CreateDateColumn()
   createdAt!: Date;
