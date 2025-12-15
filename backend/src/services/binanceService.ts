@@ -88,49 +88,107 @@ export class BinanceService {
   }
 
   /**
-   * Get ALL trades across ALL symbols (OPTIMIZED for rate limits)
-   * Only checks pairs where you have/had balance > 0
+   * Get symbols from recent order history
+   * This helps discover assets you traded but no longer hold
+   */
+  private async getRecentOrderSymbols(startTime?: number): Promise<string[]> {
+    try {
+      // Top trading pairs commonly used (includes USDC and USDT variants)
+      const topPairs = [
+        // Major coins - USDT
+        'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
+        'ADAUSDT', 'DOGEUSDT', 'DOTUSDT', 'MATICUSDT', 'LINKUSDT',
+        'LTCUSDT', 'AVAXUSDT', 'ATOMUSDT', 'UNIUSDT', 'FILUSDT',
+        'APTUSDT', 'ARBUSDT', 'OPUSDT', 'INJUSDT', 'PEPEUSDT',
+        'SHIBUSDT', 'WLDUSDT', 'RNDRUSDT', 'SAGAUSDT', 'CHESSUSDT',
+        // Major coins - USDC (important!)
+        'BTCUSDC', 'ETHUSDC', 'BNBUSDC', 'SOLUSDC', 'XRPUSDC',
+        'ADAUSDC', 'DOGEUSDC', 'DOTUSDC', 'MATICUSDC', 'LINKUSDC',
+        'LTCUSDC', 'AVAXUSDC', 'ATOMUSDC', 'UNIUSDC', 'FILUSDC',
+        'APTUSDC', 'ARBUSDC', 'OPUSDC', 'INJUSDC', 'PEPEUSDC',
+        'SHIBUSDC', 'WLDUSDC', 'RNDRUSDC', 'SAGAUSDC', 'CHESSUSDC',
+        // Other quote assets
+        'BTCBUSD', 'ETHBUSD', 'BNBBUSD', 'BTCFDUSD', 'ETHFDUSD'
+      ];
+      
+      const symbols = new Set<string>();
+      
+      console.log('Checking recent order history for additional symbols...');
+      
+      for (const symbol of topPairs) {
+        try {
+          const params: any = { limit: 100 };
+          if (startTime) {
+            params.startTime = startTime;
+          }
+          
+          const response = await this.client.allOrders(symbol, params);
+          
+          // If we have filled orders for this symbol, add it
+          if (response.data && response.data.length > 0) {
+            const filledOrders = response.data.filter((o: any) => o.status === 'FILLED');
+            if (filledOrders.length > 0) {
+              symbols.add(symbol);
+            }
+          }
+          
+          await this.delay(50); // Short delay between checks
+          
+        } catch (error) {
+          // Symbol doesn't exist or no permission - skip silently
+        }
+      }
+      
+      console.log(`Found ${symbols.size} symbols from order history:`, Array.from(symbols).join(', '));
+      return Array.from(symbols);
+      
+    } catch (error) {
+      console.error('Failed to get recent order symbols:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get ALL trades across ALL symbols (ENHANCED VERSION)
+   * Checks:
+   * 1. Assets with current balance > 0
+   * 2. Assets from recent order history (even if balance = 0 now)
    */
   async getAllMyTrades(startTime?: number): Promise<any[]> {
     try {
-      console.log('=== OPTIMIZED IMPORT - Fetching account info ===');
+      console.log('=== ENHANCED IMPORT - Fetching account info ===');
       
-      // Get account to see which assets we have/had with balance
+      // 1. Get assets with current balance
       const accountInfo = await this.client.account();
-      
-      // Filter assets with balance > 0 (free or locked)
       const assetsWithBalance = accountInfo.data.balances
         .filter((b: any) => parseFloat(b.free) > 0 || parseFloat(b.locked) > 0)
         .map((b: any) => b.asset);
       
-      console.log(`Found ${assetsWithBalance.length} assets with balance > 0:`, assetsWithBalance.join(', '));
+      console.log(`Found ${assetsWithBalance.length} assets with current balance > 0:`, assetsWithBalance.join(', '));
       
-      // Generate possible trading pairs ONLY for assets with balance
+      // 2. Get symbols from recent orders (discovers assets you traded but sold)
+      const recentOrdersSymbols = await this.getRecentOrderSymbols(startTime);
+      
+      // 3. Merge: symbols from orders + generated pairs for assets with balance
+      const allSymbols = new Set<string>([...recentOrdersSymbols]);
+      
+      // Also add generated pairs for assets with balance
       const quoteAssets = ['USDT', 'USDC', 'BUSD', 'BTC', 'ETH', 'BNB', 'FDUSD', 'TUSD'];
-      const symbols = new Set<string>();
-      
       for (const asset of assetsWithBalance) {
-        // Skip if asset is already a quote asset
-        if (quoteAssets.includes(asset)) {
-          continue;
-        }
-        
-        // Add pairs with all quote assets
+        if (quoteAssets.includes(asset)) continue;
         for (const quote of quoteAssets) {
-          symbols.add(`${asset}${quote}`);
+          allSymbols.add(`${asset}${quote}`);
         }
       }
 
-      console.log(`Generated ${symbols.size} potential trading pairs to check`);
+      console.log(`Total symbols to check: ${allSymbols.size}`);
       console.log('Starting trade fetch with rate limit protection...');
       
       let allTrades: any[] = [];
       let symbolsWithTrades = 0;
       let symbolsChecked = 0;
-      let rateLimitDelay = 100; // Start with 100ms delay
       
-      // Fetch trades for each symbol with rate limit protection
-      for (const symbol of Array.from(symbols)) {
+      for (const symbol of Array.from(allSymbols)) {
         try {
           const params: any = { limit: 1000 };
           if (startTime) {
@@ -146,26 +204,20 @@ export class BinanceService {
           }
           
           symbolsChecked++;
-          
-          // Add delay to avoid rate limits (100ms between requests)
-          await this.delay(rateLimitDelay);
+          await this.delay(100);
           
         } catch (error: any) {
           symbolsChecked++;
           
-          // Check for rate limit error
           if (error.response?.status === 418 || error.response?.status === 429) {
             console.error('⚠️  Rate limit hit! Stopping import.');
-            console.error(`Checked ${symbolsChecked}/${symbols.size} symbols before rate limit`);
-            throw new Error('Rate limit exceeded. Please wait a few minutes and try again.');
+            console.error(`Checked ${symbolsChecked}/${allSymbols.size} symbols before rate limit`);
+            throw new Error('Rate limit exceeded. Please wait and try again.');
           }
           
-          // Symbol doesn't exist or no trades - this is normal
-          if (!error.message?.includes('Invalid symbol')) {
-            // Only log every 10th symbol to reduce noise
-            if (symbolsChecked % 10 === 0) {
-              console.log(`  Checked ${symbolsChecked}/${symbols.size} symbols...`);
-            }
+          // Only log every 10th symbol to reduce noise
+          if (symbolsChecked % 10 === 0) {
+            console.log(`  Checked ${symbolsChecked}/${allSymbols.size} symbols...`);
           }
         }
       }
