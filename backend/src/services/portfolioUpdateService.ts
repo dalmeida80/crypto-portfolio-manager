@@ -107,6 +107,9 @@ export class PortfolioUpdateService {
     const symbols = Array.from(holdings.keys());
     const prices = await this.priceService.getPrices(symbols);
 
+    console.log('Fetched prices for symbols:', symbols);
+    console.log('Prices received:', prices);
+
     // Calculate totals
     let totalInvested = 0;
     let currentValue = 0;
@@ -117,10 +120,12 @@ export class PortfolioUpdateService {
       const normalizedSymbol = this.normalizeSymbol(symbol);
       const currentPrice = prices[normalizedSymbol];
       
+      console.log(`${symbol} -> normalized: ${normalizedSymbol}, price: ${currentPrice}`);
+      
       if (currentPrice) {
         currentValue += holding.quantity * currentPrice;
       } else {
-        console.warn(`No price found for ${symbol}, using average price`);
+        console.warn(`No price found for ${symbol} (normalized: ${normalizedSymbol}), using average price`);
         currentValue += holding.quantity * holding.averagePrice;
       }
     }
@@ -219,12 +224,20 @@ export class PortfolioUpdateService {
 
     const prices = await this.priceService.getPrices(symbols);
 
+    console.log('Holdings - symbols:', symbols);
+    console.log('Holdings - prices:', prices);
+
     const result = [];
 
     for (const [symbol, holding] of holdings) {
       const normalizedSymbol = this.normalizeSymbol(symbol);
-      const currentPrice = prices[normalizedSymbol] || holding.averagePrice;
-      const currentValue = holding.quantity * currentPrice;
+      const currentPrice = prices[normalizedSymbol];
+      
+      console.log(`Holdings: ${symbol} -> ${normalizedSymbol}, price: ${currentPrice || 'NOT FOUND'}`);
+      
+      // Use current price from API, fallback to average price only if not found
+      const priceToUse = currentPrice || holding.averagePrice;
+      const currentValue = holding.quantity * priceToUse;
       const profitLoss = currentValue - holding.totalInvested;
       const profitLossPercentage = (profitLoss / holding.totalInvested) * 100;
 
@@ -232,7 +245,7 @@ export class PortfolioUpdateService {
         symbol,
         quantity: holding.quantity,
         averagePrice: holding.averagePrice,
-        currentPrice,
+        currentPrice: priceToUse,
         totalInvested: holding.totalInvested,
         currentValue,
         profitLoss,
@@ -243,11 +256,28 @@ export class PortfolioUpdateService {
     return result.sort((a, b) => b.currentValue - a.currentValue);
   }
 
+  /**
+   * Normalize symbol to USDT pair (matching priceService logic)
+   * Examples:
+   * - SAGAUSDC -> SAGAUSDT
+   * - BTCBUSD -> BTCUSDT
+   * - BTC -> BTCUSDT
+   */
   private normalizeSymbol(symbol: string): string {
     const upper = symbol.toUpperCase();
-    if (upper.endsWith('USDT') || upper.endsWith('BUSD') || upper.endsWith('EUR')) {
-      return upper;
+    
+    // Extract base asset by removing common quote assets
+    const quoteAssets = ['USDT', 'USDC', 'BUSD', 'TUSD', 'FDUSD', 'EUR', 'BTC', 'ETH', 'BNB'];
+    
+    let baseAsset = upper;
+    for (const quote of quoteAssets) {
+      if (upper.endsWith(quote)) {
+        baseAsset = upper.slice(0, -quote.length);
+        break;
+      }
     }
-    return `${upper}USDT`;
+    
+    // Always return USDT pair for consistency
+    return `${baseAsset}USDT`;
   }
 }
