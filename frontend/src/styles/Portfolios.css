@@ -1,68 +1,158 @@
 .portfolios-page {
-  width: 100%;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 30px;
-}
-
-.page-header h1 {
-  font-size: 32px;
-  color: #2c3e50;
-}
-
-.create-form-card {
-  background: white;
-  padding: 30px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  margin-bottom: 30px;
-}
-
-.create-form-card h2 {
-  font-size: 20px;
-  margin-bottom: 20px;
-  color: #2c3e50;
-}
-
-.create-form-card form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
 }
 
 .portfolios-list {
-  margin-top: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 20px;
 }
 
-.portfolio-card-header {
+.portfolio-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 20px;
+  transition: box-shadow 0.2s;
 }
 
-.portfolio-card .stat {
-  display: flex;
-  justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
+.portfolio-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.portfolio-card .stat:last-child {
-  border-bottom: none;
-  margin-bottom: 15px;
+.portfolio-info h3 {
+  margin: 0 0 5px 0;
+  color: #333;
 }
 
-.portfolio-card .stat .label {
+.portfolio-info p {
+  margin: 0 0 10px 0;
+  color: #666;
   font-size: 14px;
+}
+
+.portfolio-stats-small {
+  display: flex;
+  gap: 15px;
+  font-size: 14px;
+}
+
+.portfolio-stats-small span {
   color: #666;
 }
 
-.portfolio-card .stat .value {
+.portfolio-stats-small .positive {
+  color: #10b981;
   font-weight: 600;
+}
+
+.portfolio-stats-small .negative {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.portfolio-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-danger {
+  background-color: #ef4444;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
   font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.btn-danger:hover {
+  background-color: #dc2626;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #666;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: #333;
+}
+
+.modal-content form {
+  padding: 20px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: white;
+  border-radius: 12px;
+  border: 2px dashed #e0e0e0;
+  margin-top: 20px;
+}
+
+.empty-state h2 {
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.empty-state p {
+  color: #666;
+  margin-bottom: 20px;
 }

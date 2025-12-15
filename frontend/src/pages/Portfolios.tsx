@@ -1,20 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { Portfolio, CreatePortfolioDto } from '../types';
+import { Portfolio } from '../types';
 import apiService from '../services/api';
 import '../styles/Portfolios.css';
 
 const Portfolios: React.FC = () => {
+  const navigate = useNavigate();
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [formData, setFormData] = useState<CreatePortfolioDto>({
-    name: '',
-    description: '',
-  });
-  const [creating, setCreating] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editingPortfolio, setEditingPortfolio] = useState<Portfolio | null>(null);
+  const [formData, setFormData] = useState({ name: '', description: '' });
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     loadPortfolios();
@@ -23,148 +22,141 @@ const Portfolios: React.FC = () => {
   const loadPortfolios = async () => {
     try {
       setLoading(true);
+      setError('');
       const data = await apiService.getPortfolios();
-      setPortfolios(data);
+      setPortfolios(data || []);
     } catch (err: any) {
       setError('Failed to load portfolios');
-      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCreatePortfolio = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCreating(true);
+  const handleOpenModal = (portfolio?: Portfolio) => {
+    if (portfolio) {
+      setEditingPortfolio(portfolio);
+      setFormData({ name: portfolio.name, description: portfolio.description || '' });
+    } else {
+      setEditingPortfolio(null);
+      setFormData({ name: '', description: '' });
+    }
+    setShowModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setEditingPortfolio(null);
+    setFormData({ name: '', description: '' });
     setError('');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccessMessage('');
 
     try {
-      await apiService.createPortfolio(formData);
-      setFormData({ name: '', description: '' });
-      setShowCreateForm(false);
+      if (editingPortfolio) {
+        await apiService.updatePortfolio(editingPortfolio.id, formData);
+        setSuccessMessage('Portfolio updated!');
+      } else {
+        await apiService.createPortfolio(formData);
+        setSuccessMessage('Portfolio created!');
+      }
+      handleCloseModal();
       await loadPortfolios();
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to create portfolio');
-    } finally {
-      setCreating(false);
+      setError(err.response?.data?.error || 'Failed to save portfolio');
     }
   };
 
-  const handleDeletePortfolio = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this portfolio?')) {
-      return;
-    }
-
+  const handleDelete = async (portfolio: Portfolio) => {
+    if (!window.confirm(`Delete "${portfolio.name}"?`)) return;
     try {
-      await apiService.deletePortfolio(id);
+      await apiService.deletePortfolio(portfolio.id);
+      setSuccessMessage('Portfolio deleted!');
       await loadPortfolios();
+      setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to delete portfolio');
+      setError('Failed to delete portfolio');
     }
   };
 
   if (loading) {
-    return (
-      <Layout>
-        <div className="loading">Loading...</div>
-      </Layout>
-    );
+    return <Layout><div className="loading">Loading...</div></Layout>;
   }
 
   return (
     <Layout>
       <div className="portfolios-page">
         <div className="page-header">
-          <h1>My Portfolios</h1>
-          <button
-            onClick={() => setShowCreateForm(!showCreateForm)}
-            className="btn btn-primary"
-          >
-            {showCreateForm ? 'Cancel' : 'Create Portfolio'}
-          </button>
+          <div>
+            <h1>Manage Portfolios</h1>
+            <p>Create, edit, and manage your portfolios</p>
+          </div>
+          <button onClick={() => handleOpenModal()} className="btn-primary">+ Create Portfolio</button>
         </div>
 
         {error && <div className="error-message">{error}</div>}
+        {successMessage && <div className="success-message">{successMessage}</div>}
 
-        {showCreateForm && (
-          <div className="create-form-card">
-            <h2>Create New Portfolio</h2>
-            <form onSubmit={handleCreatePortfolio}>
-              <div className="form-group">
-                <label htmlFor="name">Portfolio Name *</label>
-                <input
-                  type="text"
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                  placeholder="e.g., Main Portfolio"
-                />
+        {portfolios.length === 0 ? (
+          <div className="empty-state">
+            <h2>No Portfolios Yet</h2>
+            <p>Create your first portfolio to start tracking.</p>
+            <button onClick={() => handleOpenModal()} className="btn-primary">Create Portfolio</button>
+          </div>
+        ) : (
+          <div className="portfolios-list">
+            {portfolios.map((p) => (
+              <div key={p.id} className="portfolio-item">
+                <div className="portfolio-info">
+                  <h3>{p.name}</h3>
+                  {p.description && <p>{p.description}</p>}
+                  <div className="portfolio-stats-small">
+                    <span>Invested: ${(p.totalInvested || 0).toFixed(2)}</span>
+                    <span>Value: ${(p.currentValue || 0).toFixed(2)}</span>
+                    <span className={(p.profitLoss || 0) >= 0 ? 'positive' : 'negative'}>
+                      P/L: ${(p.profitLoss || 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+                <div className="portfolio-actions">
+                  <button onClick={() => navigate(`/portfolios/${p.id}`)} className="btn-secondary">View</button>
+                  <button onClick={() => handleOpenModal(p)} className="btn-secondary">Edit</button>
+                  <button onClick={() => handleDelete(p)} className="btn-danger">Delete</button>
+                </div>
               </div>
-
-              <div className="form-group">
-                <label htmlFor="description">Description</label>
-                <textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Optional description"
-                  rows={3}
-                />
-              </div>
-
-              <button type="submit" className="btn btn-primary" disabled={creating}>
-                {creating ? 'Creating...' : 'Create Portfolio'}
-              </button>
-            </form>
+            ))}
           </div>
         )}
 
-        <div className="portfolios-list">
-          {portfolios.length === 0 ? (
-            <div className="empty-state">
-              <p>No portfolios found. Create your first portfolio to get started!</p>
-            </div>
-          ) : (
-            <div className="portfolio-grid">
-              {portfolios.map((portfolio) => (
-                <div key={portfolio.id} className="portfolio-card">
-                  <div className="portfolio-card-header">
-                    <h3>{portfolio.name}</h3>
-                    <button
-                      onClick={() => handleDeletePortfolio(portfolio.id)}
-                      className="btn btn-danger btn-small"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                  {portfolio.description && (
-                    <p className="description">{portfolio.description}</p>
-                  )}
-                  <div className="portfolio-stats">
-                    <div className="stat">
-                      <span className="label">Total Invested</span>
-                      <span className="value">${portfolio.totalInvested.toFixed(2)}</span>
-                    </div>
-                    <div className="stat">
-                      <span className="label">Current Value</span>
-                      <span className="value">${portfolio.currentValue.toFixed(2)}</span>
-                    </div>
-                    <div className="stat">
-                      <span className="label">Profit/Loss</span>
-                      <span className={`value ${portfolio.profitLoss >= 0 ? 'positive' : 'negative'}`}>
-                        ${portfolio.profitLoss.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                  <Link to={`/portfolios/${portfolio.id}`} className="btn btn-secondary btn-block">
-                    View Details
-                  </Link>
+        {showModal && (
+          <div className="modal-overlay" onClick={handleCloseModal}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>{editingPortfolio ? 'Edit' : 'Create'} Portfolio</h2>
+                <button onClick={handleCloseModal} className="modal-close">&times;</button>
+              </div>
+              <form onSubmit={handleSubmit}>
+                <div className="form-group">
+                  <label>Portfolio Name *</label>
+                  <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="e.g., Binance" required />
                 </div>
-              ))}
+                <div className="form-group">
+                  <label>Description</label>
+                  <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={3} />
+                </div>
+                {error && <div className="error-message">{error}</div>}
+                <div className="modal-actions">
+                  <button type="submit" className="btn-primary">{editingPortfolio ? 'Update' : 'Create'}</button>
+                  <button type="button" onClick={handleCloseModal} className="btn-secondary">Cancel</button>
+                </div>
+              </form>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </Layout>
   );
