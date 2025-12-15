@@ -7,6 +7,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Portfolios from './pages/Portfolios';
 import PortfolioDetail from './pages/PortfolioDetail';
+import Transfers from './pages/Transfers';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/portfolios" element={<Portfolios />} />
             <Route path="/portfolios/:id" element={<PortfolioDetail />} />
+            <Route path="/portfolios/:id/transfers" element={<Transfers />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </BrowserRouter>
