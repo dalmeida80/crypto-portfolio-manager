@@ -1,58 +1,26 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
-import ProtectedRoute from './components/ProtectedRoute';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
-import Portfolios from './pages/Portfolios';
 import PortfolioDetail from './pages/PortfolioDetail';
-import Settings from './pages/Settings';
+import './App.css';
 
-const App: React.FC = () => {
+function App() {
   return (
-    <Router>
-      <AuthProvider>
+    <ErrorBoundary>
+      <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/portfolios"
-            element={
-              <ProtectedRoute>
-                <Portfolios />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/portfolios/:id"
-            element={
-              <ProtectedRoute>
-                <PortfolioDetail />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute>
-                <Settings />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/portfolios/:id" element={<PortfolioDetail />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>
-      </AuthProvider>
-    </Router>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
-};
+}
 
 export default App;
