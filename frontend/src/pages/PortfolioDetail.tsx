@@ -1,496 +1,440 @@
-// BUILD TEST - 1765800819
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import Layout from '../components/Layout';
-import { Portfolio, Trade, CreateTradeDto, TradeType } from '../types';
-import apiService, { Holding } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import apiService from '../services/api';
+import { Portfolio, Trade, Holding } from '../types';
 import '../styles/PortfolioDetail.css';
+
+// Helper function to safely format numbers
+const formatNumber = (value: number | null | undefined, decimals: number = 2): string => {
+  return (value ?? 0).toFixed(decimals);
+};
 
 const PortfolioDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
-  const [trades, setTrades] = useState<Trade[]>([]);
   const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [error, setError] = useState('');
-  const [importMessage, setImportMessage] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [showTradeForm, setShowTradeForm] = useState(false);
   const [showImportForm, setShowImportForm] = useState(false);
-  const [showHoldings, setShowHoldings] = useState(true);
-  const [importStartDate, setImportStartDate] = useState('');
-  const [formData, setFormData] = useState<CreateTradeDto>({
-    portfolioId: '',
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [tradeForm, setTradeForm] = useState({
     symbol: '',
-    type: 'BUY',
-    quantity: 0,
-    price: 0,
-    fee: 0,
+    type: 'BUY' as 'BUY' | 'SELL',
+    quantity: '',
+    price: '',
+    fee: '0',
+    executedAt: new Date().toISOString().slice(0, 16),
+    notes: '',
   });
-  const [creating, setCreating] = useState(false);
+  const [importForm, setImportForm] = useState({
+    startDate: '',
+  });
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
-    if (id) {
-      loadPortfolioData(id);
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
     }
-  }, [id]);
 
-  const loadPortfolioData = async (portfolioId: string) => {
+    fetchPortfolioData();
+  }, [id, isAuthenticated, navigate]);
+
+  const fetchPortfolioData = async () => {
     try {
       setLoading(true);
-      const [portfolioData, tradesData] = await Promise.all([
-        apiService.getPortfolio(portfolioId),
-        apiService.getTrades(portfolioId),
+      setError(null);
+
+      const [portfolioData, holdingsData, tradesData] = await Promise.all([
+        apiService.getPortfolio(id!),
+        apiService.getHoldings(id!),
+        apiService.getTrades(id!),
       ]);
+
       setPortfolio(portfolioData);
+      setHoldings(holdingsData);
       setTrades(tradesData);
-      setFormData((prev) => ({ ...prev, portfolioId }));
-      
-      // Load holdings if there are trades
-      if (tradesData.length > 0) {
-        loadHoldings(portfolioId);
-      }
     } catch (err: any) {
-      setError('Failed to load portfolio data');
-      console.error(err);
+      console.error('Error fetching portfolio:', err);
+      setError(err.response?.data?.message || 'Failed to load portfolio');
     } finally {
       setLoading(false);
     }
   };
 
-  const loadHoldings = async (portfolioId: string) => {
+  const handleTradeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     try {
-      const holdingsData = await apiService.getPortfolioHoldings(portfolioId);
-      setHoldings(holdingsData);
-    } catch (err: any) {
-      console.error('Failed to load holdings:', err);
-    }
-  };
+      await apiService.createTrade(id!, {
+        ...tradeForm,
+        quantity: parseFloat(tradeForm.quantity),
+        price: parseFloat(tradeForm.price),
+        fee: parseFloat(tradeForm.fee),
+      });
 
-  const handleRefreshPrices = async () => {
-    if (!id) return;
-    
-    try {
-      setRefreshing(true);
-      setError('');
-      const updatedPortfolio = await apiService.refreshPortfolio(id);
-      setPortfolio(updatedPortfolio);
-      
-      // Reload holdings with new prices
-      await loadHoldings(id);
-      
-      // Success message
-      setError('');
+      setShowTradeForm(false);
+      setTradeForm({
+        symbol: '',
+        type: 'BUY',
+        quantity: '',
+        price: '',
+        fee: '0',
+        executedAt: new Date().toISOString().slice(0, 16),
+        notes: '',
+      });
+
+      await fetchPortfolioData();
     } catch (err: any) {
-      setError('Failed to refresh prices');
-      console.error(err);
-    } finally {
-      setRefreshing(false);
+      setError(err.response?.data?.message || 'Failed to create trade');
     }
   };
 
   const handleImportTrades = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id) return;
+    setImporting(true);
+    setError(null);
+    setSuccessMessage(null);
 
     try {
-      setImporting(true);
-      setError('');
-      setImportMessage('');
-
-      const result = await apiService.importAllTrades(
-        id,
-        importStartDate || undefined
+      const result = await apiService.importBinanceTrades(id!, importForm.startDate || undefined);
+      
+      setSuccessMessage(
+        `✅ Import completed!\n` +
+        `Trades: ${result.tradesImported}\n` +
+        `Deposits: ${result.depositsImported}\n` +
+        `Withdrawals: ${result.withdrawalsImported}`
       );
 
-      if (result.success) {
-        setImportMessage(
-          `✅ ${result.message}\n` +
-          `Imported: ${result.imported}\n` +
-          `Skipped: ${result.skipped}`
-        );
-        
-        // Reload portfolio data
-        await loadPortfolioData(id);
-        
-        // Refresh prices
-        await handleRefreshPrices();
-        
-        setShowImportForm(false);
-      } else {
-        setError(`Import failed: ${result.message}`);
-      }
+      setShowImportForm(false);
+      setImportForm({ startDate: '' });
+      
+      // Refresh data
+      await fetchPortfolioData();
     } catch (err: any) {
       const errorMsg = err.response?.data?.message || err.message || 'Failed to import trades';
       setError(errorMsg);
-      
-      // Check for rate limit error
-      if (errorMsg.includes('rate limit') || errorMsg.includes('banned')) {
-        setError(
-          '⚠️ Binance rate limit exceeded. Please wait a few minutes and try again.\n' +
-          'The system is optimized but Binance has strict limits.'
-        );
-      }
     } finally {
       setImporting(false);
     }
   };
 
-  const handleCreateTrade = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCreating(true);
-    setError('');
-
+  const handleRefreshPrices = async () => {
     try {
-      await apiService.createTrade(formData);
-      setFormData({
-        portfolioId: id!,
-        symbol: '',
-        type: 'BUY',
-        quantity: 0,
-        price: 0,
-        fee: 0,
-      });
-      setShowTradeForm(false);
-      await loadPortfolioData(id!);
+      setError(null);
+      await apiService.refreshPrices(id!);
+      await fetchPortfolioData();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to create trade');
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleDeleteTrade = async (tradeId: string) => {
-    if (!confirm('Are you sure you want to delete this trade?')) {
-      return;
-    }
-
-    try {
-      await apiService.deleteTrade(tradeId);
-      await loadPortfolioData(id!);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to delete trade');
+      setError(err.response?.data?.message || 'Failed to refresh prices');
     }
   };
 
   if (loading) {
-    return (
-      <Layout>
-        <div className="loading">Loading...</div>
-      </Layout>
-    );
+    return <div className="portfolio-detail">Loading...</div>;
+  }
+
+  if (error) {
+    return <div className="portfolio-detail error">{error}</div>;
   }
 
   if (!portfolio) {
-    return (
-      <Layout>
-        <div className="error-message">Portfolio not found</div>
-      </Layout>
-    );
+    return <div className="portfolio-detail">Portfolio not found</div>;
   }
 
-  const profitLossPercentage = portfolio.totalInvested > 0 
-    ? (portfolio.profitLoss / portfolio.totalInvested) * 100 
+  const profitLossPercentage = portfolio.totalInvested > 0
+    ? ((portfolio.profitLoss / portfolio.totalInvested) * 100)
     : 0;
 
   return (
-    <Layout>
-      <div className="portfolio-detail">
-        <div className="page-header">
-          <div>
-            <button onClick={() => navigate('/portfolios')} className="btn btn-back">
-              ← Back
-            </button>
-            <h1>{portfolio.name}</h1>
-            {portfolio.description && <p className="description">{portfolio.description}</p>}
-          </div>
-          <div className="header-actions">
-            <button
-              onClick={() => setShowImportForm(!showImportForm)}
-              className="btn btn-success"
-              disabled={importing}
-            >
-              {showImportForm ? 'Cancel' : '📥 Import from Binance'}
-            </button>
-            <button
-              onClick={handleRefreshPrices}
-              className="btn btn-secondary"
-              disabled={refreshing}
-            >
-              {refreshing ? '🔄 Refreshing...' : '🔄 Refresh Prices'}
-            </button>
-            <button
-              onClick={() => setShowTradeForm(!showTradeForm)}
-              className="btn btn-primary"
-            >
-              {showTradeForm ? 'Cancel' : '+ Add Trade'}
-            </button>
-          </div>
+    <div className="portfolio-detail">
+      <button onClick={() => navigate('/dashboard')} className="btn-back">
+        ← Back to Dashboard
+      </button>
+
+      <div className="page-header">
+        <div>
+          <h1>{portfolio.name}</h1>
+          {portfolio.description && <p>{portfolio.description}</p>}
         </div>
+        <div className="header-actions">
+          <button onClick={() => setShowImportForm(!showImportForm)} className="btn-success">
+            📥 Import from Binance
+          </button>
+          <button onClick={handleRefreshPrices} className="btn-secondary">
+            🔄 Refresh Prices
+          </button>
+          <button onClick={() => setShowTradeForm(!showTradeForm)} className="btn-primary">
+            + Add Trade
+          </button>
+        </div>
+      </div>
 
-        {error && <div className="error-message">{error}</div>}
-        {importMessage && <div className="success-message">{importMessage}</div>}
+      {successMessage && (
+        <div className="success-message">{successMessage}</div>
+      )}
 
-        {showImportForm && (
-          <div className="trade-form-card import-form">
-            <h2>📥 Import Trades from Binance</h2>
-            <p className="form-description">
-              Import all your trades, deposits, and withdrawals from Binance.
-              Optionally specify a start date to import only recent trades.
-            </p>
-            <form onSubmit={handleImportTrades}>
+      {showImportForm && (
+        <div className="trade-form-card import-form">
+          <h2>📥 Import Trades from Binance</h2>
+          <p className="form-description">
+            Import your trading history from Binance automatically
+          </p>
+
+          <form onSubmit={handleImportTrades}>
+            <div className="form-row">
               <div className="form-group">
-                <label htmlFor="importStartDate">
+                <label>
                   Start Date (optional)
                   <span className="hint">Leave empty to import all trades</span>
                 </label>
                 <input
-                  type="date"
-                  id="importStartDate"
-                  value={importStartDate}
-                  onChange={(e) => setImportStartDate(e.target.value)}
-                  max={new Date().toISOString().split('T')[0]}
+                  type="datetime-local"
+                  value={importForm.startDate}
+                  onChange={(e) => setImportForm({ ...importForm, startDate: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="import-info">
+              <h3>ℹ️ What will be imported:</h3>
+              <ul>
+                <li>✅ Spot trades (BUY/SELL)</li>
+                <li>✅ Crypto deposits</li>
+                <li>✅ Crypto withdrawals</li>
+                <li>⚠️ Rate limit: ~1200 requests/minute</li>
+              </ul>
+            </div>
+
+            <div className="form-actions">
+              <button type="submit" className="btn-success" disabled={importing}>
+                {importing ? '⏳ Importing...' : '🚀 Start Import'}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowImportForm(false)}
+                disabled={importing}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showTradeForm && (
+        <div className="trade-form-card">
+          <h2>Add New Trade</h2>
+          <form onSubmit={handleTradeSubmit}>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Symbol</label>
+                <input
+                  type="text"
+                  value={tradeForm.symbol}
+                  onChange={(e) => setTradeForm({ ...tradeForm, symbol: e.target.value.toUpperCase() })}
+                  placeholder="BTCUSDT"
+                  required
                 />
               </div>
 
-              <div className="import-info">
-                <h3>ℹ️ What will be imported:</h3>
-                <ul>
-                  <li>✅ All trading pairs (USDT, USDC, BUSD, BTC, ETH, etc.)</li>
-                  <li>✅ Spot trades (BUY/SELL)</li>
-                  <li>✅ Deposits (tracked as acquisitions)</li>
-                  <li>✅ Withdrawals (tracked as disposals)</li>
-                  <li>⏱️ Estimated time: 10-30 seconds</li>
-                </ul>
-              </div>
-
-              <div className="form-actions">
-                <button 
-                  type="submit" 
-                  className="btn btn-primary" 
-                  disabled={importing}
+              <div className="form-group">
+                <label>Type</label>
+                <select
+                  value={tradeForm.type}
+                  onChange={(e) => setTradeForm({ ...tradeForm, type: e.target.value as 'BUY' | 'SELL' })}
                 >
-                  {importing ? '⏳ Importing... Please wait' : '🚀 Start Import'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowImportForm(false)}
-                  className="btn btn-secondary"
-                  disabled={importing}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        <div className="stats-grid">
-          <div className="stat-card">
-            <h3>Total Invested</h3>
-            <p className="stat-value">${portfolio.totalInvested.toFixed(2)}</p>
-          </div>
-          <div className="stat-card">
-            <h3>Current Value</h3>
-            <p className="stat-value">${portfolio.currentValue.toFixed(2)}</p>
-          </div>
-          <div className="stat-card">
-            <h3>Profit/Loss</h3>
-            <p className={`stat-value ${portfolio.profitLoss >= 0 ? 'positive' : 'negative'}`}>
-              ${portfolio.profitLoss.toFixed(2)}
-              <span className="percentage">
-                ({profitLossPercentage >= 0 ? '+' : ''}{profitLossPercentage.toFixed(2)}%)
-              </span>
-            </p>
-          </div>
-          <div className="stat-card">
-            <h3>Total Trades</h3>
-            <p className="stat-value">{trades.length}</p>
-          </div>
-        </div>
-
-        {showTradeForm && (
-          <div className="trade-form-card">
-            <h2>Add New Trade</h2>
-            <form onSubmit={handleCreateTrade}>
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="symbol">Symbol *</label>
-                  <input
-                    type="text"
-                    id="symbol"
-                    value={formData.symbol}
-                    onChange={(e) => setFormData({ ...formData, symbol: e.target.value.toUpperCase() })}
-                    required
-                    placeholder="BTC, ETH, etc."
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="type">Type *</label>
-                  <select
-                    id="type"
-                    value={formData.type}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value as TradeType })}
-                    required
-                  >
-                    <option value="BUY">BUY</option>
-                    <option value="SELL">SELL</option>
-                  </select>
-                </div>
+                  <option value="BUY">BUY</option>
+                  <option value="SELL">SELL</option>
+                </select>
               </div>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="quantity">Quantity *</label>
-                  <input
-                    type="number"
-                    id="quantity"
-                    step="0.00000001"
-                    value={formData.quantity}
-                    onChange={(e) => setFormData({ ...formData, quantity: parseFloat(e.target.value) })}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="price">Price *</label>
-                  <input
-                    type="number"
-                    id="price"
-                    step="0.01"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="fee">Fee</label>
-                  <input
-                    type="number"
-                    id="fee"
-                    step="0.01"
-                    value={formData.fee}
-                    onChange={(e) => setFormData({ ...formData, fee: parseFloat(e.target.value) })}
-                  />
-                </div>
+              <div className="form-group">
+                <label>Quantity</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={tradeForm.quantity}
+                  onChange={(e) => setTradeForm({ ...tradeForm, quantity: e.target.value })}
+                  required
+                />
               </div>
 
-              <button type="submit" className="btn btn-primary" disabled={creating}>
-                {creating ? 'Adding...' : 'Add Trade'}
-              </button>
-            </form>
-          </div>
-        )}
+              <div className="form-group">
+                <label>Price</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={tradeForm.price}
+                  onChange={(e) => setTradeForm({ ...tradeForm, price: e.target.value })}
+                  required
+                />
+              </div>
 
-        {holdings.length > 0 && (
-          <div className="holdings-section">
-            <div className="section-header">
-              <h2>Current Holdings</h2>
-              <button 
-                onClick={() => setShowHoldings(!showHoldings)} 
-                className="btn btn-small"
+              <div className="form-group">
+                <label>Fee</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={tradeForm.fee}
+                  onChange={(e) => setTradeForm({ ...tradeForm, fee: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Executed At</label>
+                <input
+                  type="datetime-local"
+                  value={tradeForm.executedAt}
+                  onChange={(e) => setTradeForm({ ...tradeForm, executedAt: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Notes (optional)</label>
+              <textarea
+                value={tradeForm.notes}
+                onChange={(e) => setTradeForm({ ...tradeForm, notes: e.target.value })}
+                rows={3}
+              />
+            </div>
+
+            <div className="form-actions">
+              <button type="submit" className="btn-primary">Create Trade</button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowTradeForm(false)}
               >
-                {showHoldings ? 'Hide' : 'Show'}
+                Cancel
               </button>
             </div>
-            {showHoldings && (
-              <div className="holdings-table">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Asset</th>
-                      <th>Quantity</th>
-                      <th>Avg Price</th>
-                      <th>Current Price</th>
-                      <th>Invested</th>
-                      <th>Current Value</th>
-                      <th>P/L</th>
-                      <th>P/L %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {holdings.map((holding) => (
-                      <tr key={holding.symbol}>
-                        <td><strong>{holding.symbol}</strong></td>
-                        <td>{holding.quantity.toFixed(8)}</td>
-                        <td>${holding.averagePrice.toFixed(2)}</td>
-                        <td className="current-price">${holding.currentPrice.toFixed(2)}</td>
-                        <td>${holding.totalInvested.toFixed(2)}</td>
-                        <td>${holding.currentValue.toFixed(2)}</td>
-                        <td className={holding.profitLoss >= 0 ? 'positive' : 'negative'}>
-                          ${holding.profitLoss.toFixed(2)}
-                        </td>
-                        <td className={holding.profitLossPercentage >= 0 ? 'positive' : 'negative'}>
-                          {holding.profitLossPercentage >= 0 ? '+' : ''}{holding.profitLossPercentage.toFixed(2)}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
+          </form>
+        </div>
+      )}
 
-        <div className="trades-section">
-          <h2>Trade History</h2>
-          {trades.length === 0 ? (
-            <div className="empty-state">
-              <p>No trades yet. Import from Binance or add your first trade manually!</p>
-            </div>
-          ) : (
-            <div className="trades-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Symbol</th>
-                    <th>Type</th>
-                    <th>Quantity</th>
-                    <th>Price</th>
-                    <th>Fee</th>
-                    <th>Total</th>
-                    <th>Source</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trades.map((trade) => (
-                    <tr key={trade.id}>
-                      <td>{new Date(trade.executedAt).toLocaleDateString()}</td>
-                      <td><strong>{trade.symbol}</strong></td>
-                      <td>
-                        <span className={`badge ${trade.type === 'BUY' ? 'badge-success' : 'badge-danger'}`}>
-                          {trade.type}
-                        </span>
-                      </td>
-                      <td>{trade.quantity}</td>
-                      <td>${trade.price.toFixed(2)}</td>
-                      <td>${trade.fee.toFixed(2)}</td>
-                      <td>${trade.total.toFixed(2)}</td>
-                      <td>
-                        <span className="badge badge-info">
-                          {trade.source || 'manual'}
-                        </span>
-                      </td>
-                      <td>
-                        <button
-                          onClick={() => handleDeleteTrade(trade.id)}
-                          className="btn btn-danger btn-small"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+      <div className="stats-grid">
+        <div className="stat-card">
+          <h3>Total Invested</h3>
+          <p className="stat-value">${formatNumber(portfolio.totalInvested)}</p>
+        </div>
+        <div className="stat-card">
+          <h3>Current Value</h3>
+          <p className="stat-value">${formatNumber(portfolio.currentValue)}</p>
+        </div>
+        <div className="stat-card">
+          <h3>Profit/Loss</h3>
+          <p className={`stat-value ${portfolio.profitLoss >= 0 ? 'positive' : 'negative'}`}>
+            ${formatNumber(portfolio.profitLoss)}
+            <span className="percentage">
+              ({profitLossPercentage >= 0 ? '+' : ''}{formatNumber(profitLossPercentage)}%)
+            </span>
+          </p>
         </div>
       </div>
-    </Layout>
+
+      <div className="holdings-section">
+        <div className="section-header">
+          <h2>Holdings</h2>
+        </div>
+
+        {holdings.length === 0 ? (
+          <div className="holdings-table">
+            <p style={{ padding: '20px', textAlign: 'center' }}>No holdings yet</p>
+          </div>
+        ) : (
+          <div className="holdings-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Asset</th>
+                  <th>Quantity</th>
+                  <th>Avg Price</th>
+                  <th>Current Price</th>
+                  <th>Invested</th>
+                  <th>Current Value</th>
+                  <th>Profit/Loss</th>
+                  <th>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {holdings.map((holding) => (
+                  <tr key={holding.symbol}>
+                    <td><strong>{holding.symbol}</strong></td>
+                    <td>{formatNumber(holding.quantity, 8)}</td>
+                    <td>${formatNumber(holding.averagePrice)}</td>
+                    <td className="current-price">${formatNumber(holding.currentPrice)}</td>
+                    <td>${formatNumber(holding.totalInvested)}</td>
+                    <td>${formatNumber(holding.currentValue)}</td>
+                    <td className={holding.profitLoss >= 0 ? 'positive' : 'negative'}>
+                      ${formatNumber(holding.profitLoss)}
+                    </td>
+                    <td className={holding.profitLossPercentage >= 0 ? 'positive' : 'negative'}>
+                      {holding.profitLossPercentage >= 0 ? '+' : ''}{formatNumber(holding.profitLossPercentage)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="trades-section">
+        <h2>Trade History</h2>
+
+        {trades.length === 0 ? (
+          <div className="trades-table">
+            <p style={{ padding: '20px', textAlign: 'center' }}>No trades yet</p>
+          </div>
+        ) : (
+          <div className="trades-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Symbol</th>
+                  <th>Type</th>
+                  <th>Quantity</th>
+                  <th>Price</th>
+                  <th>Fee</th>
+                  <th>Total</th>
+                  <th>Source</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trades.map((trade) => (
+                  <tr key={trade.id}>
+                    <td>{new Date(trade.executedAt).toLocaleString()}</td>
+                    <td><strong>{trade.symbol}</strong></td>
+                    <td className={trade.type === 'BUY' ? 'positive' : 'negative'}>
+                      {trade.type}
+                    </td>
+                    <td>{formatNumber(trade.quantity, 8)}</td>
+                    <td>${formatNumber(trade.price)}</td>
+                    <td>${formatNumber(trade.fee)}</td>
+                    <td>${formatNumber(trade.total)}</td>
+                    <td>
+                      {trade.source && (
+                        <span className="badge-info">{trade.source}</span>
+                      )}
+                    </td>
+                    <td>{trade.notes}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
