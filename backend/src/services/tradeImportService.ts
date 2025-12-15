@@ -86,37 +86,63 @@ export class TradeImportService {
 
       // Get account info to find symbols with balances
       const accountInfo = await binance.getAccountBalances();
-      const symbols = accountInfo
-        .map((b: any) => `${b.asset}USDT`)
-        .filter((s: string) => !s.startsWith('USDT'));
+      
+      // Generate trading pairs with multiple quote currencies
+      const quoteAssets = ['USDT', 'USDC', 'BUSD', 'BTC', 'ETH'];
+      const symbols = new Set<string>();
+      
+      // Add pairs based on current balances
+      for (const balance of accountInfo) {
+        if (balance.asset === 'USDT' || balance.asset === 'USDC' || balance.asset === 'BUSD') {
+          continue; // Skip stablecoins as base assets
+        }
+        for (const quote of quoteAssets) {
+          symbols.add(`${balance.asset}${quote}`);
+        }
+      }
+
+      // Also add common trading pairs
+      const commonPairs = [
+        // USDT pairs
+        'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT', 'XRPUSDT', 'DOTUSDT', 'MATICUSDT',
+        // USDC pairs
+        'BTCUSDC', 'ETHUSDC', 'BNBUSDC', 'SOLUSDC', 'ADAUSDC', 'XRPUSDC', 'DOTUSDC', 'MATICUSDC',
+        // BUSD pairs
+        'BTCBUSD', 'ETHBUSD', 'BNBBUSD', 'SOLBUSD'
+      ];
+      
+      commonPairs.forEach(pair => symbols.add(pair));
 
       // Get all trades for each symbol
       let allBinanceTrades: BinanceTrade[] = [];
+      let symbolsChecked = 0;
+      let symbolsWithTrades = 0;
       
-      for (const symbol of symbols) {
+      console.log(`Checking ${symbols.size} trading pairs for trades...`);
+      
+      for (const symbol of Array.from(symbols)) {
         try {
           const trades = await binance.getTradeHistory(symbol);
-          allBinanceTrades = allBinanceTrades.concat(trades);
+          if (trades && trades.length > 0) {
+            allBinanceTrades = allBinanceTrades.concat(trades);
+            symbolsWithTrades++;
+            console.log(`Found ${trades.length} trades for ${symbol}`);
+          }
+          symbolsChecked++;
         } catch (error) {
-          console.log(`Skipping ${symbol} - no trades found`);
+          // Symbol not found or no trades - this is normal
         }
       }
 
-      // Also try common pairs
-      const commonPairs = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT'];
-      for (const symbol of commonPairs) {
-        try {
-          const trades = await binance.getTradeHistory(symbol);
-          allBinanceTrades = allBinanceTrades.concat(trades);
-        } catch (error) {
-          // Ignore errors for common pairs
-        }
-      }
+      console.log(`Checked ${symbolsChecked} symbols, found trades in ${symbolsWithTrades} symbols`);
+      console.log(`Total trades fetched: ${allBinanceTrades.length}`);
 
       // Remove duplicates by trade ID
       const uniqueTrades = Array.from(
         new Map(allBinanceTrades.map(t => [t.id, t])).values()
       );
+
+      console.log(`Unique trades after deduplication: ${uniqueTrades.length}`);
 
       // Filter by start date if provided
       let filteredTrades = uniqueTrades;
@@ -124,6 +150,7 @@ export class TradeImportService {
         filteredTrades = uniqueTrades.filter(
           t => new Date(t.time) >= startDate
         );
+        console.log(`Trades after date filter (since ${startDate.toISOString()}): ${filteredTrades.length}`);
       }
 
       // Sort by date (oldest first)
@@ -140,6 +167,8 @@ export class TradeImportService {
           .filter(t => t.externalId)
           .map(t => t.externalId)
       );
+
+      console.log(`Existing trades in database: ${existingExternalIds.size}`);
 
       // Import trades
       let imported = 0;
@@ -172,8 +201,11 @@ export class TradeImportService {
         imported++;
       }
 
+      console.log(`Import complete: ${imported} imported, ${skipped} skipped`);
+
       // Update portfolio values
       if (imported > 0) {
+        console.log(`Updating portfolio ${portfolioId} values...`);
         await this.portfolioUpdateService.updatePortfolio(portfolioId);
       }
 
