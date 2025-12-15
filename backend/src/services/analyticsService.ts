@@ -34,6 +34,12 @@ export class AnalyticsService {
 
       const holdings = this.calculateHoldings(portfolio.trades);
       
+      // Calculate total fees
+      const totalFees = portfolio.trades.reduce((sum, trade) => {
+        const fee = typeof trade.fee === 'string' ? parseFloat(trade.fee) : trade.fee;
+        return sum + (fee || 0);
+      }, 0);
+      
       // Get current prices if API key provided
       let enrichedHoldings: HoldingAnalytics[] = [];
       let totalInvested = 0;
@@ -92,9 +98,11 @@ export class AnalyticsService {
           currentValue: parseFloat(totalCurrentValue.toFixed(8)),
           profitLoss: parseFloat(totalProfitLoss.toFixed(8)),
           profitLossPercent: parseFloat(totalProfitLossPercent.toFixed(2)),
+          totalFees: parseFloat(totalFees.toFixed(8)), // Add total fees
         },
         holdings: enrichedHoldings,
         totalTrades: portfolio.trades.length,
+        totalFees: parseFloat(totalFees.toFixed(8)), // Also in root
       };
     } catch (error) {
       throw new Error(`Analytics calculation failed: ${error}`);
