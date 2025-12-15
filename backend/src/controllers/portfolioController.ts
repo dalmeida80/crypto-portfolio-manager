@@ -48,16 +48,6 @@ export const listPortfolios = async (req: AuthRequest, res: Response): Promise<v
       order: { createdAt: 'DESC' },
     });
 
-    // DEBUG: Log portfolio values before sending
-    console.log('=== LIST PORTFOLIOS DEBUG ===');
-    portfolios.forEach(p => {
-      console.log(`Portfolio ${p.name}:`);
-      console.log(`  - totalInvested (raw): ${p.totalInvested}, type: ${typeof p.totalInvested}`);
-      console.log(`  - currentValue (raw): ${p.currentValue}, type: ${typeof p.currentValue}`);
-      console.log(`  - profitLoss (raw): ${p.profitLoss}, type: ${typeof p.profitLoss}`);
-    });
-    console.log('============================');
-
     res.json(portfolios);
   } catch (error) {
     console.error('List portfolios error:', error);
@@ -80,14 +70,6 @@ export const getPortfolio = async (req: AuthRequest, res: Response): Promise<voi
       res.status(404).json({ error: 'Portfolio not found' });
       return;
     }
-
-    // DEBUG: Log single portfolio values
-    console.log('=== GET PORTFOLIO DEBUG ===');
-    console.log(`Portfolio ${portfolio.name}:`);
-    console.log(`  - totalInvested: ${portfolio.totalInvested}`);
-    console.log(`  - currentValue: ${portfolio.currentValue}`);
-    console.log(`  - profitLoss: ${portfolio.profitLoss}`);
-    console.log('===========================');
 
     res.json(portfolio);
   } catch (error) {
