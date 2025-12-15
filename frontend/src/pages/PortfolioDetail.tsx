@@ -52,7 +52,7 @@ const PortfolioDetail: React.FC = () => {
 
       const [portfolioData, holdingsData, tradesData] = await Promise.all([
         apiService.getPortfolio(id!),
-        apiService.getHoldings(id!),
+        apiService.getPortfolioHoldings(id!),
         apiService.getTrades(id!),
       ]);
 
@@ -70,7 +70,7 @@ const PortfolioDetail: React.FC = () => {
   const handleTradeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await apiService.createTrade(id!, {
+      await apiService.createTrade({portfolioId: id!,
         ...tradeForm,
         quantity: parseFloat(tradeForm.quantity),
         price: parseFloat(tradeForm.price),
@@ -101,7 +101,7 @@ const PortfolioDetail: React.FC = () => {
     setSuccessMessage(null);
 
     try {
-      const result = await apiService.importBinanceTrades(id!, importForm.startDate || undefined);
+      const result = await apiService.importAllTrades(id!, importForm.startDate || undefined);
       
       setSuccessMessage(
         `✅ Import completed!\n` +
@@ -126,7 +126,7 @@ const PortfolioDetail: React.FC = () => {
   const handleRefreshPrices = async () => {
     try {
       setError(null);
-      await apiService.refreshPrices(id!);
+      await apiService.refreshPortfolio(id!);
       await fetchPortfolioData();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to refresh prices');
