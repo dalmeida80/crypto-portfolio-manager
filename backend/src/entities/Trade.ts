@@ -73,6 +73,9 @@ export class Trade {
   @Column({ default: 'binance' })
   source!: string;
 
+  @Column({ type: 'text', nullable: true })
+  notes?: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 }
