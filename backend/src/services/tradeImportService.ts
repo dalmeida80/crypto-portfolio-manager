@@ -25,6 +25,8 @@ interface ImportResult {
   skipped: number;
   errors: number;
   trades: Trade[];
+  deposits?: number;
+  withdrawals?: number;
   message: string;
 }
 
@@ -36,7 +38,8 @@ export class TradeImportService {
   }
 
   /**
-   * Import trades from Binance for a specific portfolio
+   * Import ALL trades from Binance for a specific portfolio
+   * Now uses getAllMyTrades() to fetch everything
    */
   async importTrades(
     portfolioId: string,
@@ -84,58 +87,28 @@ export class TradeImportService {
       // Create Binance service
       const binance = await BinanceService.createFromApiKey(apiKey);
 
-      // Get account info to find symbols with balances
-      const accountInfo = await binance.getAccountBalances();
-      
-      // Generate trading pairs with multiple quote currencies
-      const quoteAssets = ['USDT', 'USDC', 'BUSD', 'BTC', 'ETH'];
-      const symbols = new Set<string>();
-      
-      // Add pairs based on current balances
-      for (const balance of accountInfo) {
-        if (balance.asset === 'USDT' || balance.asset === 'USDC' || balance.asset === 'BUSD') {
-          continue; // Skip stablecoins as base assets
-        }
-        for (const quote of quoteAssets) {
-          symbols.add(`${balance.asset}${quote}`);
-        }
+      const startTime = startDate ? startDate.getTime() : undefined;
+
+      console.log('=== STARTING COMPREHENSIVE IMPORT ===');
+      if (startDate) {
+        console.log(`Import start date: ${startDate.toISOString()}`);
       }
 
-      // Also add common trading pairs
-      const commonPairs = [
-        // USDT pairs
-        'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT', 'XRPUSDT', 'DOTUSDT', 'MATICUSDT',
-        // USDC pairs
-        'BTCUSDC', 'ETHUSDC', 'BNBUSDC', 'SOLUSDC', 'ADAUSDC', 'XRPUSDC', 'DOTUSDC', 'MATICUSDC',
-        // BUSD pairs
-        'BTCBUSD', 'ETHBUSD', 'BNBBUSD', 'SOLBUSD'
-      ];
-      
-      commonPairs.forEach(pair => symbols.add(pair));
+      // Fetch ALL trades using the new comprehensive method
+      console.log('Fetching ALL trades from Binance...');
+      const allBinanceTrades = await binance.getAllMyTrades(startTime);
 
-      // Get all trades for each symbol
-      let allBinanceTrades: BinanceTrade[] = [];
-      let symbolsChecked = 0;
-      let symbolsWithTrades = 0;
-      
-      console.log(`Checking ${symbols.size} trading pairs for trades...`);
-      
-      for (const symbol of Array.from(symbols)) {
-        try {
-          const trades = await binance.getTradeHistory(symbol);
-          if (trades && trades.length > 0) {
-            allBinanceTrades = allBinanceTrades.concat(trades);
-            symbolsWithTrades++;
-            console.log(`Found ${trades.length} trades for ${symbol}`);
-          }
-          symbolsChecked++;
-        } catch (error) {
-          // Symbol not found or no trades - this is normal
-        }
-      }
+      console.log(`Total trades fetched from Binance: ${allBinanceTrades.length}`);
 
-      console.log(`Checked ${symbolsChecked} symbols, found trades in ${symbolsWithTrades} symbols`);
-      console.log(`Total trades fetched: ${allBinanceTrades.length}`);
+      // Fetch deposits
+      console.log('Fetching deposit history...');
+      const deposits = await binance.getDepositHistory(startTime);
+      console.log(`Total deposits: ${deposits.length}`);
+
+      // Fetch withdrawals
+      console.log('Fetching withdrawal history...');
+      const withdrawals = await binance.getWithdrawHistory(startTime);
+      console.log(`Total withdrawals: ${withdrawals.length}`);
 
       // Remove duplicates by trade ID
       const uniqueTrades = Array.from(
@@ -144,13 +117,13 @@ export class TradeImportService {
 
       console.log(`Unique trades after deduplication: ${uniqueTrades.length}`);
 
-      // Filter by start date if provided
+      // Filter by start date if provided (double check)
       let filteredTrades = uniqueTrades;
       if (startDate) {
         filteredTrades = uniqueTrades.filter(
           t => new Date(t.time) >= startDate
         );
-        console.log(`Trades after date filter (since ${startDate.toISOString()}): ${filteredTrades.length}`);
+        console.log(`Trades after date filter: ${filteredTrades.length}`);
       }
 
       // Sort by date (oldest first)
@@ -175,6 +148,7 @@ export class TradeImportService {
       let skipped = 0;
       const importedTrades: Trade[] = [];
 
+      // Import regular trades
       for (const binanceTrade of filteredTrades) {
         const externalId = `binance-${binanceTrade.id}`;
 
@@ -201,7 +175,76 @@ export class TradeImportService {
         imported++;
       }
 
-      console.log(`Import complete: ${imported} imported, ${skipped} skipped`);
+      // Import deposits as BUY trades
+      let depositsImported = 0;
+      for (const deposit of deposits) {
+        const externalId = `binance-deposit-${deposit.txId || deposit.id}`;
+        
+        if (existingExternalIds.has(externalId)) {
+          skipped++;
+          continue;
+        }
+
+        // Create synthetic symbol (e.g., BTCUSDT for BTC deposit)
+        const symbol = `${deposit.coin}USDT`;
+        
+        const trade = new Trade();
+        trade.portfolioId = portfolioId;
+        trade.symbol = symbol;
+        trade.type = 'BUY';
+        trade.quantity = parseFloat(deposit.amount);
+        trade.price = 0; // Deposits don't have a purchase price
+        trade.fee = 0;
+        trade.total = 0;
+        trade.executedAt = new Date(deposit.insertTime || deposit.time);
+        trade.externalId = externalId;
+        trade.source = 'binance-deposit';
+        trade.notes = `Deposit: ${deposit.coin}`;
+
+        await tradeRepo.save(trade);
+        importedTrades.push(trade);
+        depositsImported++;
+        imported++;
+      }
+
+      // Import withdrawals as SELL trades
+      let withdrawalsImported = 0;
+      for (const withdrawal of withdrawals) {
+        const externalId = `binance-withdrawal-${withdrawal.id}`;
+        
+        if (existingExternalIds.has(externalId)) {
+          skipped++;
+          continue;
+        }
+
+        // Create synthetic symbol
+        const symbol = `${withdrawal.coin}USDT`;
+        
+        const trade = new Trade();
+        trade.portfolioId = portfolioId;
+        trade.symbol = symbol;
+        trade.type = 'SELL';
+        trade.quantity = parseFloat(withdrawal.amount);
+        trade.price = 0;
+        trade.fee = parseFloat(withdrawal.transactionFee || 0);
+        trade.total = 0;
+        trade.executedAt = new Date(withdrawal.completeTime || withdrawal.applyTime);
+        trade.externalId = externalId;
+        trade.source = 'binance-withdrawal';
+        trade.notes = `Withdrawal: ${withdrawal.coin}`;
+
+        await tradeRepo.save(trade);
+        importedTrades.push(trade);
+        withdrawalsImported++;
+        imported++;
+      }
+
+      console.log(`Import complete:`);
+      console.log(`  - Trades: ${imported - depositsImported - withdrawalsImported}`);
+      console.log(`  - Deposits: ${depositsImported}`);
+      console.log(`  - Withdrawals: ${withdrawalsImported}`);
+      console.log(`  - Total imported: ${imported}`);
+      console.log(`  - Skipped (duplicates): ${skipped}`);
 
       // Update portfolio values
       if (imported > 0) {
@@ -215,7 +258,9 @@ export class TradeImportService {
         skipped,
         errors: 0,
         trades: importedTrades,
-        message: `Successfully imported ${imported} trades (${skipped} already existed)`
+        deposits: depositsImported,
+        withdrawals: withdrawalsImported,
+        message: `Successfully imported ${imported} items (${imported - depositsImported - withdrawalsImported} trades, ${depositsImported} deposits, ${withdrawalsImported} withdrawals). ${skipped} already existed.`
       };
 
     } catch (error: any) {
@@ -261,6 +306,8 @@ export class TradeImportService {
     let totalImported = 0;
     let totalSkipped = 0;
     let totalErrors = 0;
+    let totalDeposits = 0;
+    let totalWithdrawals = 0;
     const allTrades: Trade[] = [];
 
     for (const apiKey of apiKeys) {
@@ -274,6 +321,8 @@ export class TradeImportService {
       totalImported += result.imported;
       totalSkipped += result.skipped;
       totalErrors += result.errors;
+      totalDeposits += result.deposits || 0;
+      totalWithdrawals += result.withdrawals || 0;
       allTrades.push(...result.trades);
     }
 
@@ -283,7 +332,9 @@ export class TradeImportService {
       skipped: totalSkipped,
       errors: totalErrors,
       trades: allTrades,
-      message: `Imported ${totalImported} trades from ${apiKeys.length} API key(s)`
+      deposits: totalDeposits,
+      withdrawals: totalWithdrawals,
+      message: `Imported ${totalImported} items from ${apiKeys.length} API key(s) (${totalImported - totalDeposits - totalWithdrawals} trades, ${totalDeposits} deposits, ${totalWithdrawals} withdrawals)`
     };
   }
 
@@ -293,6 +344,8 @@ export class TradeImportService {
   async getImportStatus(portfolioId: string): Promise<{
     totalTrades: number;
     binanceTrades: number;
+    deposits: number;
+    withdrawals: number;
     manualTrades: number;
     lastImportDate: Date | null;
     oldestTrade: Date | null;
@@ -306,11 +359,15 @@ export class TradeImportService {
     });
 
     const binanceTrades = trades.filter(t => t.source === 'binance');
-    const manualTrades = trades.filter(t => t.source !== 'binance');
+    const deposits = trades.filter(t => t.source === 'binance-deposit');
+    const withdrawals = trades.filter(t => t.source === 'binance-withdrawal');
+    const manualTrades = trades.filter(t => !t.source || t.source === 'manual');
 
     return {
       totalTrades: trades.length,
       binanceTrades: binanceTrades.length,
+      deposits: deposits.length,
+      withdrawals: withdrawals.length,
       manualTrades: manualTrades.length,
       lastImportDate: binanceTrades.length > 0 ? binanceTrades[0].createdAt : null,
       oldestTrade: trades.length > 0 ? trades[trades.length - 1].executedAt : null,
