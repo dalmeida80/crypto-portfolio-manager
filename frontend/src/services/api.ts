@@ -65,6 +65,15 @@ export interface ImportStatus {
   newestTrade: string | null;
 }
 
+export interface UserStats {
+  totalDeposits: number;
+  totalWithdrawals: number;
+  totalFees: number;
+  depositsCount: number;
+  withdrawalsCount: number;
+  tradesCount: number;
+}
+
 class ApiService {
   private api: AxiosInstance;
 
@@ -162,6 +171,12 @@ class ApiService {
 
   async deletePortfolio(id: string): Promise<void> {
     await this.api.delete(`/portfolios/${id}`);
+  }
+
+  // User stats (deposits, withdrawals, fees)
+  async getUserStats(): Promise<UserStats> {
+    const { data } = await this.api.get<UserStats>('/portfolios/stats');
+    return data;
   }
 
   // Trade methods
