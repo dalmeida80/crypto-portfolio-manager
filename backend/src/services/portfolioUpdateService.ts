@@ -1,6 +1,7 @@
 import { AppDataSource } from '../index';
 import { Portfolio } from '../entities/Portfolio';
 import { Trade } from '../entities/Trade';
+import { Transfer } from '../entities/Transfer';
 import { ClosedPosition } from '../entities/ClosedPosition';
 import { PriceService } from './priceService';
 
@@ -108,9 +109,11 @@ export class PortfolioUpdateService {
       existing.totalInvested = metrics.totalInvested;
       existing.totalReceived = metrics.totalReceived;
       existing.realizedProfitLoss = metrics.totalReceived - metrics.totalInvested;
-      existing.realizedProfitLossPercentage = (existing.realizedProfitLoss / metrics.totalInvested) * 100;
-      existing.averageBuyPrice = metrics.totalInvested / metrics.totalBought;
-      existing.averageSellPrice = metrics.totalReceived / metrics.totalSold;
+      existing.realizedProfitLossPercentage = metrics.totalInvested > 0 
+        ? (existing.realizedProfitLoss / metrics.totalInvested) * 100
+        : 0;
+      existing.averageBuyPrice = metrics.totalBought > 0 ? metrics.totalInvested / metrics.totalBought : 0;
+      existing.averageSellPrice = metrics.totalSold > 0 ? metrics.totalReceived / metrics.totalSold : 0;
       existing.closedAt = metrics.lastSellDate;
       existing.numberOfTrades = metrics.numberOfTrades;
       await closedPositionRepo.save(existing);
@@ -123,33 +126,81 @@ export class PortfolioUpdateService {
     closedPosition.symbol = symbol.toUpperCase();
     closedPosition.totalBought = metrics.totalBought;
     closedPosition.totalSold = metrics.totalSold;
-    closedPosition.averageBuyPrice = metrics.totalInvested / metrics.totalBought;
-    closedPosition.averageSellPrice = metrics.totalReceived / metrics.totalSold;
+    closedPosition.averageBuyPrice = metrics.totalBought > 0 ? metrics.totalInvested / metrics.totalBought : 0;
+    closedPosition.averageSellPrice = metrics.totalSold > 0 ? metrics.totalReceived / metrics.totalSold : 0;
     closedPosition.totalInvested = metrics.totalInvested;
     closedPosition.totalReceived = metrics.totalReceived;
     closedPosition.realizedProfitLoss = metrics.totalReceived - metrics.totalInvested;
-    closedPosition.realizedProfitLossPercentage = (closedPosition.realizedProfitLoss / metrics.totalInvested) * 100;
+    closedPosition.realizedProfitLossPercentage = metrics.totalInvested > 0
+      ? (closedPosition.realizedProfitLoss / metrics.totalInvested) * 100
+      : 0;
     closedPosition.openedAt = metrics.firstBuyDate;
     closedPosition.closedAt = metrics.lastSellDate;
     closedPosition.numberOfTrades = metrics.numberOfTrades;
 
     await closedPositionRepo.save(closedPosition);
-    console.log(`Created closed position for ${symbol}: P/L=${closedPosition.realizedProfitLoss.toFixed(2)}`);
+    console.log(`✅ Created closed position for ${symbol}: P/L=${closedPosition.realizedProfitLoss.toFixed(2)}`);
   }
 
   /**
-   * Calculate current holdings from trades
+   * Calculate current holdings from trades AND transfers (deposits/withdrawals)
    */
   private async calculateHoldings(portfolioId: string, trades: Trade[]): Promise<Map<string, HoldingPosition>> {
     const holdings = new Map<string, HoldingPosition>();
 
-    // Sort trades by execution date
-    const sortedTrades = [...trades].sort(
-      (a, b) => new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime()
-    );
+    // Get transfers (deposits/withdrawals)
+    const transferRepo = AppDataSource.getRepository(Transfer);
+    const transfers = await transferRepo.find({
+      where: { portfolioId },
+      order: { executedAt: 'ASC' }
+    });
 
-    for (const trade of sortedTrades) {
-      const symbol = trade.symbol.toUpperCase();
+    // Combine trades and transfers, sort by date
+    const events: Array<{type: string, symbol: string, quantity: number, total: number, date: Date, fee?: number}> = [];
+
+    // Add deposits as initial holdings (cost basis = 0)
+    for (const transfer of transfers) {
+      if (transfer.type === 'DEPOSIT') {
+        events.push({
+          type: 'DEPOSIT',
+          symbol: transfer.coin + 'USDC', // Assume USDC pairs for now
+          quantity: parseFloat(transfer.amount.toString()),
+          total: 0, // Deposits have no cost basis
+          date: new Date(transfer.executedAt),
+          fee: 0
+        });
+      } else if (transfer.type === 'WITHDRAWAL') {
+        events.push({
+          type: 'WITHDRAWAL',
+          symbol: transfer.coin + 'USDC',
+          quantity: parseFloat(transfer.amount.toString()),
+          total: 0,
+          date: new Date(transfer.executedAt),
+          fee: 0
+        });
+      }
+    }
+
+    // Add trades
+    for (const trade of trades) {
+      events.push({
+        type: trade.type,
+        symbol: trade.symbol,
+        quantity: trade.quantity,
+        total: trade.total,
+        date: new Date(trade.executedAt),
+        fee: trade.fee || 0
+      });
+    }
+
+    // Sort all events by date
+    events.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    console.log(`Processing ${events.length} events (${transfers.length} transfers + ${trades.length} trades)`);
+
+    // Process events chronologically
+    for (const event of events) {
+      const symbol = event.symbol.toUpperCase();
       const existing = holdings.get(symbol) || {
         symbol,
         quantity: 0,
@@ -157,10 +208,44 @@ export class PortfolioUpdateService {
         totalInvested: 0
       };
 
-      if (trade.type === 'BUY') {
-        // Add to position
-        const newQuantity = existing.quantity + trade.quantity;
-        const newTotalInvested = existing.totalInvested + trade.total;
+      if (event.type === 'DEPOSIT') {
+        // Deposit: add quantity with zero cost
+        const newQuantity = existing.quantity + event.quantity;
+        const newTotalInvested = existing.totalInvested; // No cost for deposits
+        const newAveragePrice = newQuantity > 0 && newTotalInvested > 0
+          ? newTotalInvested / newQuantity
+          : 0;
+
+        holdings.set(symbol, {
+          symbol,
+          quantity: newQuantity,
+          averagePrice: newAveragePrice,
+          totalInvested: newTotalInvested
+        });
+        console.log(`  📥 DEPOSIT ${event.quantity} ${symbol} (total: ${newQuantity})`);
+      } else if (event.type === 'WITHDRAWAL') {
+        // Withdrawal: remove quantity proportionally
+        const newQuantity = existing.quantity - event.quantity;
+        
+        if (newQuantity <= 0.00000001) {
+          holdings.delete(symbol);
+          console.log(`  📤 WITHDRAWAL ${event.quantity} ${symbol} (position closed)`);
+        } else {
+          const withdrawnProportion = event.quantity / existing.quantity;
+          const newTotalInvested = existing.totalInvested * (1 - withdrawnProportion);
+
+          holdings.set(symbol, {
+            symbol,
+            quantity: newQuantity,
+            averagePrice: existing.averagePrice,
+            totalInvested: newTotalInvested
+          });
+          console.log(`  📤 WITHDRAWAL ${event.quantity} ${symbol} (remaining: ${newQuantity})`);
+        }
+      } else if (event.type === 'BUY') {
+        // Buy: add to position
+        const newQuantity = existing.quantity + event.quantity;
+        const newTotalInvested = existing.totalInvested + event.total + event.fee;
         const newAveragePrice = newQuantity > 0 ? newTotalInvested / newQuantity : 0;
 
         holdings.set(symbol, {
@@ -169,19 +254,20 @@ export class PortfolioUpdateService {
           averagePrice: newAveragePrice,
           totalInvested: newTotalInvested
         });
-      } else if (trade.type === 'SELL') {
-        // Reduce position
-        const newQuantity = existing.quantity - trade.quantity;
+        console.log(`  🟢 BUY ${event.quantity} ${symbol} @ $${(event.total/event.quantity).toFixed(4)} (total: ${newQuantity})`);
+      } else if (event.type === 'SELL') {
+        // Sell: reduce position
+        const newQuantity = existing.quantity - event.quantity;
         
-        // Consider position closed if quantity is very small (< 0.00000001)
         if (newQuantity <= 0.00000001) {
-          // Calculate full metrics and create closed position
+          // Position fully closed - create closed position record
           const metrics = this.calculateTradeMetrics(trades, symbol);
           await this.createClosedPosition(portfolioId, symbol, metrics);
           holdings.delete(symbol);
+          console.log(`  🔴 SELL ${event.quantity} ${symbol} @ $${(event.total/event.quantity).toFixed(4)} (position CLOSED)`);
         } else {
-          // Reduce proportionally
-          const soldProportion = trade.quantity / existing.quantity;
+          // Partial sell - reduce proportionally
+          const soldProportion = event.quantity / existing.quantity;
           const newTotalInvested = existing.totalInvested * (1 - soldProportion);
 
           holdings.set(symbol, {
@@ -190,6 +276,7 @@ export class PortfolioUpdateService {
             averagePrice: existing.averagePrice,
             totalInvested: newTotalInvested
           });
+          console.log(`  🔴 SELL ${event.quantity} ${symbol} @ $${(event.total/event.quantity).toFixed(4)} (remaining: ${newQuantity})`);
         }
       }
     }
@@ -417,7 +504,9 @@ export class PortfolioUpdateService {
       const priceToUse = currentPrice || holding.averagePrice;
       const currentValue = holding.quantity * priceToUse;
       const profitLoss = currentValue - holding.totalInvested;
-      const profitLossPercentage = (profitLoss / holding.totalInvested) * 100;
+      const profitLossPercentage = holding.totalInvested > 0
+        ? (profitLoss / holding.totalInvested) * 100
+        : 0;
 
       result.push({
         symbol: this.formatSymbolWithSlash(symbol), // Format with slash
