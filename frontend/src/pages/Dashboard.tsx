@@ -2,31 +2,57 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Portfolio } from '../types';
-import apiService from '../services/api';
+import apiService, { PortfolioStats } from '../services/api';
 import '../styles/Dashboard.css';
+
+interface AggregatedStats {
+  totalDeposits: number;
+  totalWithdrawals: number;
+  totalFees: number;
+  totalTrades: number;
+  buyTrades: number;
+  sellTrades: number;
+}
 
 const Dashboard: React.FC = () => {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
+  const [stats, setStats] = useState<AggregatedStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    loadPortfolios();
+    loadData();
   }, []);
 
-  const loadPortfolios = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
       setError('');
-      console.log('Loading portfolios...');
       const data = await apiService.getPortfolios();
-      console.log('Portfolios loaded:', data);
       setPortfolios(data || []);
+
+      // Load stats for each portfolio and aggregate
+      if (data && data.length > 0) {
+        const statsPromises = data.map(p => apiService.getPortfolioStats(p.id));
+        const allStats = await Promise.all(statsPromises);
+        
+        const aggregated = allStats.reduce(
+          (acc, stat) => ({
+            totalDeposits: acc.totalDeposits + stat.totalDeposits,
+            totalWithdrawals: acc.totalWithdrawals + stat.totalWithdrawals,
+            totalFees: acc.totalFees + stat.totalFees,
+            totalTrades: acc.totalTrades + stat.totalTrades,
+            buyTrades: acc.buyTrades + stat.buyTrades,
+            sellTrades: acc.sellTrades + stat.sellTrades,
+          }),
+          { totalDeposits: 0, totalWithdrawals: 0, totalFees: 0, totalTrades: 0, buyTrades: 0, sellTrades: 0 }
+        );
+        setStats(aggregated);
+      }
     } catch (err: any) {
-      console.error('Error loading portfolios:', err);
-      const errorMessage = err.response?.data?.message || err.message || 'Failed to load portfolios';
-      setError(errorMessage);
+      console.error('Error loading data:', err);
+      setError('Failed to load dashboard data');
       setPortfolios([]);
     } finally {
       setLoading(false);
@@ -63,8 +89,6 @@ const Dashboard: React.FC = () => {
     ? ((totals.profitLoss / totals.totalInvested) * 100).toFixed(2)
     : '0.00';
 
-  console.log('Dashboard render - loading:', loading, 'error:', error, 'portfolios:', portfolios.length);
-
   if (loading) {
     return (
       <Layout>
@@ -93,7 +117,7 @@ const Dashboard: React.FC = () => {
         {error && (
           <div className="error-message">
             <strong>Error:</strong> {error}
-            <button onClick={loadPortfolios} style={{ marginLeft: '10px' }}>Retry</button>
+            <button onClick={loadData} style={{ marginLeft: '10px' }}>Retry</button>
           </div>
         )}
 
@@ -118,6 +142,30 @@ const Dashboard: React.FC = () => {
             <p className="stat-value">{portfolios.length}</p>
           </div>
         </div>
+
+        {stats && (
+          <div className="stats-grid secondary">
+            <div className="stat-card">
+              <h3>💰 Total Fees</h3>
+              <p className="stat-value">${stats.totalFees.toFixed(2)}</p>
+            </div>
+            <div className="stat-card">
+              <h3>📥 Deposits</h3>
+              <p className="stat-value">{stats.totalDeposits.toFixed(4)}</p>
+              <span className="stat-hint">crypto units</span>
+            </div>
+            <div className="stat-card">
+              <h3>📤 Withdrawals</h3>
+              <p className="stat-value">{stats.totalWithdrawals.toFixed(4)}</p>
+              <span className="stat-hint">crypto units</span>
+            </div>
+            <div className="stat-card">
+              <h3>📊 Trades</h3>
+              <p className="stat-value">{stats.totalTrades}</p>
+              <span className="stat-hint">{stats.buyTrades} buy / {stats.sellTrades} sell</span>
+            </div>
+          </div>
+        )}
 
         <div className="portfolios-section">
           <h2>Your Portfolios</h2>
