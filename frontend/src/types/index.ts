@@ -33,6 +33,7 @@ export interface Portfolio {
   totalInvested: number;
   currentValue: number;
   profitLoss: number;
+  totalFees?: number; // Optional for backwards compatibility
   createdAt: string;
   updatedAt: string;
 }
@@ -67,6 +68,39 @@ export interface CreateTradeDto {
   notes?: string;
 }
 
+// Holding types
+export interface Holding {
+  symbol: string;
+  quantity: number;
+  averagePrice: number;
+  currentPrice: number;
+  totalInvested: number;
+  currentValue: number;
+  profitLoss: number;
+  profitLossPercentage: number;
+}
+
+// Transfer types (deposits & withdrawals)
+export type TransferType = 'DEPOSIT' | 'WITHDRAWAL';
+
+export interface Transfer {
+  id: string;
+  portfolioId: string;
+  type: TransferType;
+  asset: string;
+  amount: number;
+  fee: number;
+  executedAt: string;
+  txId?: string;
+  network?: string;
+  source?: string;
+  externalId?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Portfolio create DTO
 export interface CreatePortfolioDto {
   name: string;
   description?: string;
