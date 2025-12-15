@@ -13,9 +13,13 @@ const PortfolioDetail: React.FC = () => {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
+  const [importMessage, setImportMessage] = useState('');
   const [showTradeForm, setShowTradeForm] = useState(false);
+  const [showImportForm, setShowImportForm] = useState(false);
   const [showHoldings, setShowHoldings] = useState(true);
+  const [importStartDate, setImportStartDate] = useState('');
   const [formData, setFormData] = useState<CreateTradeDto>({
     portfolioId: '',
     symbol: '',
@@ -86,6 +90,53 @@ const PortfolioDetail: React.FC = () => {
     }
   };
 
+  const handleImportTrades = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id) return;
+
+    try {
+      setImporting(true);
+      setError('');
+      setImportMessage('');
+
+      const result = await apiService.importAllTrades(
+        id,
+        importStartDate || undefined
+      );
+
+      if (result.success) {
+        setImportMessage(
+          `✅ ${result.message}\n` +
+          `Imported: ${result.imported}\n` +
+          `Skipped: ${result.skipped}`
+        );
+        
+        // Reload portfolio data
+        await loadPortfolioData(id);
+        
+        // Refresh prices
+        await handleRefreshPrices();
+        
+        setShowImportForm(false);
+      } else {
+        setError(`Import failed: ${result.message}`);
+      }
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.message || err.message || 'Failed to import trades';
+      setError(errorMsg);
+      
+      // Check for rate limit error
+      if (errorMsg.includes('rate limit') || errorMsg.includes('banned')) {
+        setError(
+          '⚠️ Binance rate limit exceeded. Please wait a few minutes and try again.\n' +
+          'The system is optimized but Binance has strict limits.'
+        );
+      }
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleCreateTrade = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
@@ -110,7 +161,7 @@ const PortfolioDetail: React.FC = () => {
     }
   };
 
-  const handleDeleteTrade = async (tradeId: number) => {
+  const handleDeleteTrade = async (tradeId: string) => {
     if (!confirm('Are you sure you want to delete this trade?')) {
       return;
     }
@@ -156,6 +207,13 @@ const PortfolioDetail: React.FC = () => {
           </div>
           <div className="header-actions">
             <button
+              onClick={() => setShowImportForm(!showImportForm)}
+              className="btn btn-success"
+              disabled={importing}
+            >
+              {showImportForm ? 'Cancel' : '📥 Import from Binance'}
+            </button>
+            <button
               onClick={handleRefreshPrices}
               className="btn btn-secondary"
               disabled={refreshing}
@@ -172,6 +230,61 @@ const PortfolioDetail: React.FC = () => {
         </div>
 
         {error && <div className="error-message">{error}</div>}
+        {importMessage && <div className="success-message">{importMessage}</div>}
+
+        {showImportForm && (
+          <div className="trade-form-card import-form">
+            <h2>📥 Import Trades from Binance</h2>
+            <p className="form-description">
+              Import all your trades, deposits, and withdrawals from Binance.
+              Optionally specify a start date to import only recent trades.
+            </p>
+            <form onSubmit={handleImportTrades}>
+              <div className="form-group">
+                <label htmlFor="importStartDate">
+                  Start Date (optional)
+                  <span className="hint">Leave empty to import all trades</span>
+                </label>
+                <input
+                  type="date"
+                  id="importStartDate"
+                  value={importStartDate}
+                  onChange={(e) => setImportStartDate(e.target.value)}
+                  max={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+
+              <div className="import-info">
+                <h3>ℹ️ What will be imported:</h3>
+                <ul>
+                  <li>✅ All trading pairs (USDT, USDC, BUSD, BTC, ETH, etc.)</li>
+                  <li>✅ Spot trades (BUY/SELL)</li>
+                  <li>✅ Deposits (tracked as acquisitions)</li>
+                  <li>✅ Withdrawals (tracked as disposals)</li>
+                  <li>⏱️ Estimated time: 10-30 seconds</li>
+                </ul>
+              </div>
+
+              <div className="form-actions">
+                <button 
+                  type="submit" 
+                  className="btn btn-primary" 
+                  disabled={importing}
+                >
+                  {importing ? '⏳ Importing... Please wait' : '🚀 Start Import'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowImportForm(false)}
+                  className="btn btn-secondary"
+                  disabled={importing}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         <div className="stats-grid">
           <div className="stat-card">
@@ -190,6 +303,10 @@ const PortfolioDetail: React.FC = () => {
                 ({profitLossPercentage >= 0 ? '+' : ''}{profitLossPercentage.toFixed(2)}%)
               </span>
             </p>
+          </div>
+          <div className="stat-card">
+            <h3>Total Trades</h3>
+            <p className="stat-value">{trades.length}</p>
           </div>
         </div>
 
@@ -319,7 +436,7 @@ const PortfolioDetail: React.FC = () => {
           <h2>Trade History</h2>
           {trades.length === 0 ? (
             <div className="empty-state">
-              <p>No trades yet. Add your first trade to get started!</p>
+              <p>No trades yet. Import from Binance or add your first trade manually!</p>
             </div>
           ) : (
             <div className="trades-table">
@@ -333,6 +450,7 @@ const PortfolioDetail: React.FC = () => {
                     <th>Price</th>
                     <th>Fee</th>
                     <th>Total</th>
+                    <th>Source</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -350,6 +468,11 @@ const PortfolioDetail: React.FC = () => {
                       <td>${trade.price.toFixed(2)}</td>
                       <td>${trade.fee.toFixed(2)}</td>
                       <td>${trade.total.toFixed(2)}</td>
+                      <td>
+                        <span className="badge badge-info">
+                          {trade.source || 'manual'}
+                        </span>
+                      </td>
                       <td>
                         <button
                           onClick={() => handleDeleteTrade(trade.id)}
