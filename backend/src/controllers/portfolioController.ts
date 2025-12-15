@@ -6,6 +6,13 @@ import { Transfer } from '../entities/Transfer';
 import { ClosedPosition } from '../entities/ClosedPosition';
 import { AuthRequest } from '../middleware/auth';
 
+// Helper function to safely parse numbers
+const parseNum = (value: any): number => {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return parseFloat(value) || 0;
+  return 0;
+};
+
 export const createPortfolio = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { name, description } = req.body;
@@ -241,9 +248,9 @@ export const getPortfolioStats = async (
       return;
     }
 
-    // Calculate total fees from trades
+    // Calculate total fees from trades (with proper number conversion)
     const totalTradesFees = portfolio.trades.reduce(
-      (sum, trade) => sum + (trade.fee || 0),
+      (sum, trade) => sum + parseNum(trade.fee),
       0
     );
 
@@ -258,12 +265,15 @@ export const getPortfolioStats = async (
     let totalTransferFees = 0;
 
     for (const transfer of transfers) {
+      const amount = parseNum(transfer.amount);
+      const fee = parseNum(transfer.fee);
+      
       if (transfer.type === 'DEPOSIT') {
-        totalDeposits += transfer.amount;
+        totalDeposits += amount;
       } else if (transfer.type === 'WITHDRAWAL') {
-        totalWithdrawals += transfer.amount;
+        totalWithdrawals += amount;
       }
-      totalTransferFees += transfer.fee || 0;
+      totalTransferFees += fee;
     }
 
     const totalFees = totalTradesFees + totalTransferFees;
@@ -275,13 +285,13 @@ export const getPortfolioStats = async (
     });
 
     const totalRealizedProfitLoss = closedPositions.reduce(
-      (sum, cp) => sum + cp.realizedProfitLoss,
+      (sum, cp) => sum + parseNum(cp.realizedProfitLoss),
       0
     );
 
     // Calculate unrealized P/L
     const totalUnrealizedProfitLoss =
-      portfolio.currentValue - portfolio.totalInvested;
+      parseNum(portfolio.currentValue) - parseNum(portfolio.totalInvested);
 
     // Net invested = deposits - withdrawals
     const netInvested = totalDeposits - totalWithdrawals;
@@ -293,21 +303,21 @@ export const getPortfolioStats = async (
 
     res.json({
       // Money flow
-      totalDeposits,
-      totalWithdrawals,
-      netInvested,
+      totalDeposits: parseFloat(totalDeposits.toFixed(8)),
+      totalWithdrawals: parseFloat(totalWithdrawals.toFixed(8)),
+      netInvested: parseFloat(netInvested.toFixed(8)),
 
       // Fees
-      totalFees,
-      totalTradesFees,
-      totalTransferFees,
+      totalFees: parseFloat(totalFees.toFixed(8)),
+      totalTradesFees: parseFloat(totalTradesFees.toFixed(8)),
+      totalTransferFees: parseFloat(totalTransferFees.toFixed(8)),
 
       // P/L
-      totalInvested: portfolio.totalInvested,
-      currentValue: portfolio.currentValue,
-      totalProfitLoss: portfolio.profitLoss,
-      totalRealizedProfitLoss,
-      totalUnrealizedProfitLoss,
+      totalInvested: parseNum(portfolio.totalInvested),
+      currentValue: parseNum(portfolio.currentValue),
+      totalProfitLoss: parseNum(portfolio.profitLoss),
+      totalRealizedProfitLoss: parseFloat(totalRealizedProfitLoss.toFixed(2)),
+      totalUnrealizedProfitLoss: parseFloat(totalUnrealizedProfitLoss.toFixed(2)),
 
       // Trade stats
       totalTrades,
@@ -355,7 +365,7 @@ export const getUserStats = async (req: AuthRequest, res: Response): Promise<voi
     // Calculate total fees from trades
     let totalFees = 0;
     for (const portfolio of portfolios) {
-      totalFees += portfolio.trades.reduce((sum, trade) => sum + (trade.fee || 0), 0);
+      totalFees += portfolio.trades.reduce((sum, trade) => sum + parseNum(trade.fee), 0);
     }
 
     // Calculate deposits and withdrawals from transfers
@@ -368,15 +378,16 @@ export const getUserStats = async (req: AuthRequest, res: Response): Promise<voi
     let totalDeposits = 0;
     let totalWithdrawals = 0;
 
-    // Note: For now, we sum the amounts. In the future, we could
-    // multiply by prices at execution time to get USD value
     for (const transfer of transfers) {
+      const amount = parseNum(transfer.amount);
+      const fee = parseNum(transfer.fee);
+      
       if (transfer.type === 'DEPOSIT') {
-        totalDeposits += transfer.amount;
+        totalDeposits += amount;
       } else if (transfer.type === 'WITHDRAWAL') {
-        totalWithdrawals += transfer.amount;
+        totalWithdrawals += amount;
       }
-      totalFees += transfer.fee || 0;
+      totalFees += fee;
     }
 
     // Calculate realized P/L from closed positions
@@ -387,23 +398,23 @@ export const getUserStats = async (req: AuthRequest, res: Response): Promise<voi
       .getMany();
 
     const totalRealizedProfitLoss = closedPositions.reduce(
-      (sum, cp) => sum + cp.realizedProfitLoss,
+      (sum, cp) => sum + parseNum(cp.realizedProfitLoss),
       0
     );
 
     // Calculate total P/L from portfolios (unrealized + realized)
-    const totalProfitLoss = portfolios.reduce((sum, p) => sum + p.profitLoss, 0);
-    const totalInvested = portfolios.reduce((sum, p) => sum + p.totalInvested, 0);
-    const totalCurrentValue = portfolios.reduce((sum, p) => sum + p.currentValue, 0);
+    const totalProfitLoss = portfolios.reduce((sum, p) => sum + parseNum(p.profitLoss), 0);
+    const totalInvested = portfolios.reduce((sum, p) => sum + parseNum(p.totalInvested), 0);
+    const totalCurrentValue = portfolios.reduce((sum, p) => sum + parseNum(p.currentValue), 0);
     const totalUnrealizedProfitLoss = totalCurrentValue - totalInvested;
 
     res.json({
-      totalDeposits,
-      totalWithdrawals,
-      totalFees,
-      totalRealizedProfitLoss,
-      totalUnrealizedProfitLoss,
-      totalProfitLoss,
+      totalDeposits: parseFloat(totalDeposits.toFixed(8)),
+      totalWithdrawals: parseFloat(totalWithdrawals.toFixed(8)),
+      totalFees: parseFloat(totalFees.toFixed(8)),
+      totalRealizedProfitLoss: parseFloat(totalRealizedProfitLoss.toFixed(2)),
+      totalUnrealizedProfitLoss: parseFloat(totalUnrealizedProfitLoss.toFixed(2)),
+      totalProfitLoss: parseFloat(totalProfitLoss.toFixed(2)),
     });
   } catch (error) {
     console.error('Get user stats error:', error);
