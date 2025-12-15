@@ -191,3 +191,55 @@ export const getClosedPositions = async (req: AuthRequest, res: Response): Promi
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+/**
+ * Get aggregated stats for all user portfolios (deposits, withdrawals, fees)
+ */
+export const getUserStats = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+
+    // Get all user portfolios
+    const portfolioRepo = AppDataSource.getRepository(Portfolio);
+    const portfolios = await portfolioRepo.find({
+      where: { userId },
+    });
+
+    const portfolioIds = portfolios.map(p => p.id);
+
+    // Get all transfers
+    const transferRepo = AppDataSource.getRepository(Transfer);
+    const allTransfers = await transferRepo
+      .createQueryBuilder('transfer')
+      .where('transfer.portfolioId IN (:...portfolioIds)', { portfolioIds })
+      .getMany();
+
+    // Calculate deposits and withdrawals totals
+    const deposits = allTransfers.filter(t => t.type === 'DEPOSIT');
+    const withdrawals = allTransfers.filter(t => t.type === 'WITHDRAWAL');
+
+    const totalDeposits = deposits.reduce((sum, t) => sum + parseFloat(t.amount.toString()), 0);
+    const totalWithdrawals = withdrawals.reduce((sum, t) => sum + parseFloat(t.amount.toString()), 0);
+
+    // Get all trades to calculate fees
+    const tradeRepo = AppDataSource.getRepository(Trade);
+    const allTrades = await tradeRepo
+      .createQueryBuilder('trade')
+      .where('trade.portfolioId IN (:...portfolioIds)', { portfolioIds })
+      .getMany();
+
+    const totalFees = allTrades.reduce((sum, t) => sum + (parseFloat(t.fee?.toString() || '0')), 0);
+
+    res.json({
+      totalDeposits: parseFloat(totalDeposits.toFixed(8)),
+      totalWithdrawals: parseFloat(totalWithdrawals.toFixed(8)),
+      totalFees: parseFloat(totalFees.toFixed(8)),
+      depositsCount: deposits.length,
+      withdrawalsCount: withdrawals.length,
+      tradesCount: allTrades.length,
+    });
+  } catch (error) {
+    console.error('Get user stats error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
