@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import Portfolios from './pages/Portfolios';
 import PortfolioDetail from './pages/PortfolioDetail';
 import Transfers from './pages/Transfers';
+import Settings from './pages/Settings';
 import { TestShadcn } from './pages/TestShadcn';
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
               <Route path="/portfolios" element={<Portfolios />} />
               <Route path="/portfolios/:id" element={<PortfolioDetail />} />
               <Route path="/portfolios/:id/transfers" element={<Transfers />} />
+              <Route path="/settings" element={<Settings />} />
               <Route path="/test-shadcn" element={<TestShadcn />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
             </Routes>
