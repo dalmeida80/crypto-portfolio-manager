@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-
+import { ThemeToggle } from './ThemeToggle';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -27,6 +27,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Link to="/portfolios" className="navbar-item">Portfolios</Link>
           <Link to="/settings" className="navbar-item">Settings</Link>
           <div className="navbar-user">
+            <ThemeToggle />
             <span>{user?.name}</span>
             <button onClick={handleLogout} className="btn btn-secondary">Logout</button>
           </div>
