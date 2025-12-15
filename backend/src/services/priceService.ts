@@ -105,17 +105,28 @@ export class PriceService {
   }
 
   /**
-   * Normalize symbol format (e.g., BTC -> BTCUSDT, bitcoin -> BTCUSDT)
+   * Normalize symbol format to USDT pairs (most liquid market)
+   * Examples:
+   * - SAGAUSDC -> SAGAUSDT
+   * - BTCBUSD -> BTCUSDT
+   * - BTC -> BTCUSDT
+   * - SOLUSDC -> SOLUSDT
    */
   private normalizeSymbol(symbol: string): string {
     const upper = symbol.toUpperCase();
     
-    // If already includes USDT/BUSD/EUR, return as is
-    if (upper.endsWith('USDT') || upper.endsWith('BUSD') || upper.endsWith('EUR')) {
-      return upper;
+    // Extract base asset by removing common quote assets
+    const quoteAssets = ['USDT', 'USDC', 'BUSD', 'TUSD', 'FDUSD', 'EUR', 'BTC', 'ETH', 'BNB'];
+    
+    let baseAsset = upper;
+    for (const quote of quoteAssets) {
+      if (upper.endsWith(quote)) {
+        baseAsset = upper.slice(0, -quote.length);
+        break;
+      }
     }
     
-    // Common mappings
+    // Common symbol mappings
     const symbolMap: { [key: string]: string } = {
       'BITCOIN': 'BTC',
       'ETHEREUM': 'ETH',
@@ -129,9 +140,9 @@ export class PriceService {
       'POLYGON': 'MATIC'
     };
     
-    const mapped = symbolMap[upper] || upper;
+    const mapped = symbolMap[baseAsset] || baseAsset;
     
-    // Default to USDT pair
+    // Always return USDT pair for consistency and liquidity
     return `${mapped}USDT`;
   }
 
