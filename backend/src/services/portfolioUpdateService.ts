@@ -156,14 +156,14 @@ export class PortfolioUpdateService {
     });
 
     // Combine trades and transfers, sort by date
-    const events: Array<{type: string, symbol: string, quantity: number, total: number, date: Date, fee?: number}> = [];
+    const events: Array<{type: string, symbol: string, quantity: number, total: number, date: Date, fee: number}> = [];
 
-    // Add deposits as initial holdings (cost basis = 0)
+    // Add deposits/withdrawals as events
     for (const transfer of transfers) {
       if (transfer.type === 'DEPOSIT') {
         events.push({
           type: 'DEPOSIT',
-          symbol: transfer.coin + 'USDC', // Assume USDC pairs for now
+          symbol: transfer.asset + 'USDC', // Assume USDC pairs for now
           quantity: parseFloat(transfer.amount.toString()),
           total: 0, // Deposits have no cost basis
           date: new Date(transfer.executedAt),
@@ -172,7 +172,7 @@ export class PortfolioUpdateService {
       } else if (transfer.type === 'WITHDRAWAL') {
         events.push({
           type: 'WITHDRAWAL',
-          symbol: transfer.coin + 'USDC',
+          symbol: transfer.asset + 'USDC',
           quantity: parseFloat(transfer.amount.toString()),
           total: 0,
           date: new Date(transfer.executedAt),
