@@ -8,6 +8,7 @@ import { User } from './entities/User';
 import { ExchangeApiKey } from './entities/ExchangeApiKey';
 import { Portfolio } from './entities/Portfolio';
 import { Trade } from './entities/Trade';
+import { Transfer } from './entities/Transfer';
 import authRoutes from './routes/authRoutes';
 import exchangeRoutes from './routes/exchangeRoutes';
 import portfolioRoutes from './routes/portfolioRoutes';
@@ -29,7 +30,7 @@ export const AppDataSource = new DataSource({
   database: process.env.DB_NAME,
   synchronize: true,
   logging: false,
-  entities: [User, ExchangeApiKey, Portfolio, Trade],
+  entities: [User, ExchangeApiKey, Portfolio, Trade, Transfer],
 });
 
 AppDataSource.initialize()
