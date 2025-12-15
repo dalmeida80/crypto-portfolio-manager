@@ -8,7 +8,8 @@ export class SyncService {
   static async syncBinanceTrades(
     portfolioId: string,
     apiKeyId: string,
-    userId: string
+    userId: string,
+    symbol?: string
   ): Promise<{ imported: number; skipped: number }> {
     try {
       const portfolioRepo = AppDataSource.getRepository(Portfolio);
@@ -30,7 +31,11 @@ export class SyncService {
       }
 
       const binance = await BinanceService.createFromApiKey(apiKey);
-      const binanceTrades = await binance.getTradeHistory();
+      
+      // Use getAllMyTrades for comprehensive sync
+      const binanceTrades = symbol 
+        ? await binance.getTradeHistory(symbol)
+        : await binance.getAllMyTrades();
 
       const tradeRepo = AppDataSource.getRepository(Trade);
       let imported = 0;
