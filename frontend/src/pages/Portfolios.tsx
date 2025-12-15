@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Portfolio } from '../types';
 import apiService from '../services/api';
-import '../styles/Portfolios.css';
+
 
 const Portfolios: React.FC = () => {
   const navigate = useNavigate();

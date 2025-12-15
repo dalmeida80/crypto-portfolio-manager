@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import apiService, { ApiKey } from '../services/api';
-import '../styles/Settings.css';
+
 
 const Settings: React.FC = () => {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api';
 import { Portfolio, Trade, Holding } from '../types';
-import '../styles/PortfolioDetail.css';
+
 
 // Helper function to safely format numbers
 const formatNumber = (value: number | null | undefined, decimals: number = 2): string => {

@@ -1,0 +1,9 @@
+/* Import all legacy CSS files */
+@import './global.css';
+@import './Auth.css';
+@import './Dashboard.css';
+@import './Layout.css';
+@import './PortfolioDetail.css';
+@import './Portfolios.css';
+@import './Settings.css';
+@import './Transfers.css';

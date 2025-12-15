@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Portfolio } from '../types';
 import apiService, { PortfolioStats } from '../services/api';
-import '../styles/Dashboard.css';
+
 
 interface AggregatedStats {
   totalDeposits: number;

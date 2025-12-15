@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Layout from '../components/Layout';
 import apiService from '../services/api';
-import '../styles/Transfers.css';
+
 
 interface Transfer {
   id: string;

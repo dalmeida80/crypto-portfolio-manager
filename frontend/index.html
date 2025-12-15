@@ -2,11 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Crypto Portfolio Manager</title>
   </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/main.tsx"></script>
+  <body class="bg-background text-foreground">
+    <div id="root" class="container mx-auto"></div>
+    <!-- Hidden div with Tailwind classes to force inclusion -->
+    <div style="display:none" class="flex grid bg-primary text-primary-foreground rounded-md p-4 shadow border text-4xl font-bold">
+      Force Tailwind
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

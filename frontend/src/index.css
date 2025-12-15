@@ -1,7 +1,12 @@
+/* Legacy CSS (old styles) */
+@import './styles/legacy.css';
+
+/* Tailwind CSS */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* Shadcn/UI CSS Variables */
 @layer base {
   :root {
     --background: 0 0% 100%;
