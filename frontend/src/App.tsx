@@ -5,6 +5,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import Portfolios from './pages/Portfolios';
 import PortfolioDetail from './pages/PortfolioDetail';
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/portfolios" element={<Portfolios />} />
             <Route path="/portfolios/:id" element={<PortfolioDetail />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Routes>
