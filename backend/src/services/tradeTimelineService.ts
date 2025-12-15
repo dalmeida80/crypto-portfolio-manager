@@ -107,21 +107,44 @@ export class TradeTimelineService {
 
   /**
    * Process SELL trade: reduce position, calculate realized P/L
+   * If selling without an open position, treat as selling deposited assets (no P/L)
    */
   private processSell(state: PositionState, event: AssetEvent): void {
-    const averagePrice =
-      state.totalQuantity > 0 ? state.totalCost / state.totalQuantity : 0;
+    // If no open position, this is selling deposited/transferred assets
+    // Don't calculate P/L since we don't know the cost basis
+    if (state.totalQuantity <= 0 || state.totalCost <= 0) {
+      console.warn(
+        `SELL without open position - treating as selling deposited assets (no P/L calculated)`
+      );
+      // Still update quantity to reflect negative position
+      // This will be corrected when deposits/buys happen later
+      state.totalQuantity -= event.quantity;
+      return;
+    }
 
+    const averagePrice = state.totalCost / state.totalQuantity;
     const proceeds = (event.price ?? 0) * event.quantity - (event.fee ?? 0);
-    const costBasis = averagePrice * event.quantity;
+    
+    // Only calculate realized P/L for the quantity we actually have
+    const quantityToSell = Math.min(event.quantity, state.totalQuantity);
+    const costBasis = averagePrice * quantityToSell;
     const realized = proceeds - costBasis;
 
     state.realizedProfitLoss += realized;
-    state.totalQuantity -= event.quantity;
+    state.totalQuantity -= quantityToSell;
     state.totalCost -= costBasis;
 
+    // If sold more than we had, adjust quantity (negative position)
+    if (event.quantity > quantityToSell) {
+      const remainingQuantity = event.quantity - quantityToSell;
+      state.totalQuantity -= remainingQuantity;
+      console.warn(
+        `Sold ${remainingQuantity} more than available - negative position created`
+      );
+    }
+
     // Handle dust/rounding: if quantity becomes very small, set to 0
-    if (state.totalQuantity < 0.00000001) {
+    if (Math.abs(state.totalQuantity) < 0.00000001) {
       state.totalQuantity = 0;
       state.totalCost = 0;
     }
@@ -232,20 +255,27 @@ export class TradeTimelineService {
           lotFirstBuyDate = event.timestamp;
         }
       } else if (event.type === 'SELL') {
-        const averagePrice = lotQuantity > 0 ? lotCost / lotQuantity : 0;
-        const proceeds = (event.price ?? 0) * event.quantity - (event.fee ?? 0);
-        const costBasis = averagePrice * event.quantity;
+        // Skip sells without position (deposited assets sold)
+        if (lotQuantity <= 0 || lotCost <= 0) {
+          console.warn(`Skipping closed position detection for SELL without position`);
+          continue;
+        }
 
-        lotQuantity -= event.quantity;
+        const averagePrice = lotCost / lotQuantity;
+        const proceeds = (event.price ?? 0) * event.quantity - (event.fee ?? 0);
+        const quantityToSell = Math.min(event.quantity, lotQuantity);
+        const costBasis = averagePrice * quantityToSell;
+
+        lotQuantity -= quantityToSell;
         lotCost -= costBasis;
-        lotSold += event.quantity;
+        lotSold += quantityToSell;
         lotReceived += proceeds;
         lotLastSellDate = event.timestamp;
         lotTradeCount++;
 
         // Position closed: quantity is 0 or very small
         if (lotQuantity < 0.00000001 && lotBought > 0) {
-          const totalInvested = lotCost + costBasis; // Recalculate from original buys
+          const totalInvested = lotCost + costBasis;
           const realizedPL = lotReceived - totalInvested;
           const realizedPLPercent =
             totalInvested > 0 ? (realizedPL / totalInvested) * 100 : 0;
@@ -287,7 +317,9 @@ export class TradeTimelineService {
           lotFirstBuyDate = event.timestamp;
         }
       } else if (event.type === 'WITHDRAWAL') {
-        const averagePrice = lotQuantity > 0 ? lotCost / lotQuantity : 0;
+        if (lotQuantity <= 0) continue;
+        
+        const averagePrice = lotCost / lotQuantity;
         const withdrawCost = averagePrice * event.quantity;
         lotQuantity -= event.quantity;
         lotCost -= withdrawCost;
