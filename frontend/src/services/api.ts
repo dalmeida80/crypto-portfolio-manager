@@ -169,12 +169,12 @@ class ApiService {
     return data;
   }
 
-  async updateTrade(id: number, trade: Partial<CreateTradeDto>): Promise<Trade> {
+  async updateTrade(id: string, trade: Partial<CreateTradeDto>): Promise<Trade> {
     const { data } = await this.api.put<Trade>(`/trades/${id}`, trade);
     return data;
   }
 
-  async deleteTrade(id: number): Promise<void> {
+  async deleteTrade(id: string): Promise<void> {
     await this.api.delete(`/trades/${id}`);
   }
 
