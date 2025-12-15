@@ -89,6 +89,9 @@ const Dashboard: React.FC = () => {
     ? ((totals.profitLoss / totals.totalInvested) * 100).toFixed(2)
     : '0.00';
 
+  // For now, link to first portfolio's transfers page
+  const firstPortfolioId = portfolios.length > 0 ? portfolios[0].id : '';
+
   if (loading) {
     return (
       <Layout>
@@ -143,22 +146,22 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {stats && (
+        {stats && firstPortfolioId && (
           <div className="stats-grid secondary">
             <div className="stat-card">
               <h3>💰 Total Fees</h3>
               <p className="stat-value">${stats.totalFees.toFixed(2)}</p>
             </div>
-            <div className="stat-card">
+            <Link to={`/portfolios/${firstPortfolioId}/transfers`} className="stat-card clickable">
               <h3>📥 Deposits</h3>
               <p className="stat-value">{stats.totalDeposits.toFixed(4)}</p>
-              <span className="stat-hint">crypto units</span>
-            </div>
-            <div className="stat-card">
+              <span className="stat-hint">crypto units → View details</span>
+            </Link>
+            <Link to={`/portfolios/${firstPortfolioId}/transfers`} className="stat-card clickable">
               <h3>📤 Withdrawals</h3>
               <p className="stat-value">{stats.totalWithdrawals.toFixed(4)}</p>
-              <span className="stat-hint">crypto units</span>
-            </div>
+              <span className="stat-hint">crypto units → View details</span>
+            </Link>
             <div className="stat-card">
               <h3>📊 Trades</h3>
               <p className="stat-value">{stats.totalTrades}</p>
