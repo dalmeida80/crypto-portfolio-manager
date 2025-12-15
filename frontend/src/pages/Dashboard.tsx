@@ -130,25 +130,8 @@ const Dashboard: React.FC = () => {
             <h3>Portfolios</h3>
             <p className="stat-value">{portfolios.length}</p>
           </div>
-        </div>
-
-        {/* New Stats Row */}
-        {userStats && (
-          <div className="stats-grid" style={{ marginTop: '20px' }}>
-            <div className="stat-card">
-              <h3>💰 Total Deposits</h3>
-              <p className="stat-value">
-                ${userStats.totalDeposits.toFixed(2)}
-                <span className="stat-subtitle">{userStats.depositsCount} deposits</span>
-              </p>
-            </div>
-            <div className="stat-card">
-              <h3>💸 Total Withdrawals</h3>
-              <p className="stat-value">
-                ${userStats.totalWithdrawals.toFixed(2)}
-                <span className="stat-subtitle">{userStats.withdrawalsCount} withdrawals</span>
-              </p>
-            </div>
+          {/* Total Fees Card */}
+          {userStats && userStats.totalFees > 0 && (
             <div className="stat-card">
               <h3>💵 Total Fees</h3>
               <p className="stat-value negative">
@@ -156,8 +139,8 @@ const Dashboard: React.FC = () => {
                 <span className="stat-subtitle">{userStats.tradesCount} trades</span>
               </p>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         <div className="portfolios-section">
           <h2>Your Portfolios</h2>
