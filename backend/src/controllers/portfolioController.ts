@@ -3,7 +3,10 @@ import { AppDataSource } from '../index';
 import { Portfolio } from '../entities/Portfolio';
 import { Trade } from '../entities/Trade';
 import { Transfer } from '../entities/Transfer';
+import { PortfolioUpdateService } from '../services/portfolioUpdateService';
 import { AuthRequest } from '../middleware/auth';
+
+const portfolioUpdateService = new PortfolioUpdateService();
 
 export const createPortfolio = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -156,6 +159,35 @@ export const getPortfolioTransfers = async (req: AuthRequest, res: Response): Pr
     res.json(transfers);
   } catch (error) {
     console.error('Get portfolio transfers error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/**
+ * Get closed positions (fully sold assets) for a portfolio
+ */
+export const getClosedPositions = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const { portfolioId } = req.params;
+
+    // Verify portfolio ownership
+    const portfolioRepo = AppDataSource.getRepository(Portfolio);
+    const portfolio = await portfolioRepo.findOne({
+      where: { id: portfolioId, userId },
+    });
+
+    if (!portfolio) {
+      res.status(404).json({ error: 'Portfolio not found' });
+      return;
+    }
+
+    // Get closed positions
+    const closedPositions = await portfolioUpdateService.getClosedPositions(portfolioId);
+
+    res.json(closedPositions);
+  } catch (error) {
+    console.error('Get closed positions error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
