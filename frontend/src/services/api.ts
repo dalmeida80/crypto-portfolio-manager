@@ -8,7 +8,6 @@ import {
   CreatePortfolioDto,
   Trade,
   CreateTradeDto,
-  Transfer,
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -48,8 +47,6 @@ export interface ImportResult {
   imported: number;
   skipped: number;
   errors: number;
-  depositsImported?: number;
-  withdrawalsImported?: number;
   message: string;
 }
 
@@ -57,21 +54,9 @@ export interface ImportStatus {
   totalTrades: number;
   binanceTrades: number;
   manualTrades: number;
-  totalTransfers?: number;
-  deposits?: number;
-  withdrawals?: number;
   lastImportDate: string | null;
   oldestTrade: string | null;
   newestTrade: string | null;
-}
-
-export interface UserStats {
-  totalDeposits: number;
-  totalWithdrawals: number;
-  totalFees: number;
-  depositsCount: number;
-  withdrawalsCount: number;
-  tradesCount: number;
 }
 
 class ApiService {
@@ -173,12 +158,6 @@ class ApiService {
     await this.api.delete(`/portfolios/${id}`);
   }
 
-  // User stats (deposits, withdrawals, fees)
-  async getUserStats(): Promise<UserStats> {
-    const { data } = await this.api.get<UserStats>('/portfolios/stats');
-    return data;
-  }
-
   // Trade methods
   async getTrades(portfolioId: string): Promise<Trade[]> {
     const { data } = await this.api.get<Trade[]>(`/portfolios/${portfolioId}/trades`);
@@ -197,18 +176,6 @@ class ApiService {
 
   async deleteTrade(id: string): Promise<void> {
     await this.api.delete(`/trades/${id}`);
-  }
-
-  // Transfer methods (deposits & withdrawals)
-  async getTransfers(portfolioId: string): Promise<Transfer[]> {
-    const { data } = await this.api.get<Transfer[]>(`/portfolios/${portfolioId}/transfers`);
-    return data;
-  }
-
-  // Calculate total fees from trades (client-side for now)
-  async getTotalFees(portfolioId: string): Promise<number> {
-    const trades = await this.getTrades(portfolioId);
-    return trades.reduce((sum, trade) => sum + (trade.fee || 0), 0);
   }
 
   // Price methods

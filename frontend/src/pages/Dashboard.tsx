@@ -2,42 +2,32 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Portfolio } from '../types';
-import apiService, { UserStats } from '../services/api';
+import apiService from '../services/api';
 import '../styles/Dashboard.css';
 
 const Dashboard: React.FC = () => {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
-  const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    loadDashboardData();
+    loadPortfolios();
   }, []);
 
-  const loadDashboardData = async () => {
+  const loadPortfolios = async () => {
     try {
       setLoading(true);
       setError('');
-      console.log('Loading dashboard data...');
-      
-      const [portfoliosData, statsData] = await Promise.all([
-        apiService.getPortfolios(),
-        apiService.getUserStats()
-      ]);
-      
-      console.log('Portfolios loaded:', portfoliosData);
-      console.log('User stats loaded:', statsData);
-      
-      setPortfolios(portfoliosData || []);
-      setUserStats(statsData);
+      console.log('Loading portfolios...');
+      const data = await apiService.getPortfolios();
+      console.log('Portfolios loaded:', data);
+      setPortfolios(data || []);
     } catch (err: any) {
-      console.error('Error loading dashboard:', err);
-      const errorMessage = err.response?.data?.message || err.message || 'Failed to load dashboard';
+      console.error('Error loading portfolios:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to load portfolios';
       setError(errorMessage);
       setPortfolios([]);
-      setUserStats(null);
     } finally {
       setLoading(false);
     }
@@ -49,9 +39,6 @@ const Dashboard: React.FC = () => {
       setError('');
       const result = await apiService.refreshAllPortfolios();
       setPortfolios(result.portfolios);
-      // Reload stats after refresh
-      const statsData = await apiService.getUserStats();
-      setUserStats(statsData);
     } catch (err: any) {
       console.error('Error refreshing portfolios:', err);
       setError('Failed to refresh prices');
@@ -106,7 +93,7 @@ const Dashboard: React.FC = () => {
         {error && (
           <div className="error-message">
             <strong>Error:</strong> {error}
-            <button onClick={loadDashboardData} style={{ marginLeft: '10px' }}>Retry</button>
+            <button onClick={loadPortfolios} style={{ marginLeft: '10px' }}>Retry</button>
           </div>
         )}
 
@@ -130,16 +117,6 @@ const Dashboard: React.FC = () => {
             <h3>Portfolios</h3>
             <p className="stat-value">{portfolios.length}</p>
           </div>
-          {/* Total Fees Card */}
-          {userStats && userStats.totalFees > 0 && (
-            <div className="stat-card">
-              <h3>💵 Total Fees</h3>
-              <p className="stat-value negative">
-                ${userStats.totalFees.toFixed(2)}
-                <span className="stat-subtitle">{userStats.tradesCount} trades</span>
-              </p>
-            </div>
-          )}
         </div>
 
         <div className="portfolios-section">
