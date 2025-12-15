@@ -6,6 +6,9 @@ import {
   getPortfolio,
   updatePortfolio,
   deletePortfolio,
+  getPortfolioClosedPositions,
+  getPortfolioTransfers,
+  getUserStats,
 } from '../controllers/portfolioController';
 import {
   addTrade,
@@ -22,9 +25,17 @@ const router = Router();
 // Portfolio routes
 router.post('/', authenticate, createPortfolio);
 router.get('/', authenticate, listPortfolios);
+
+// Stats endpoint - must be before /:portfolioId to avoid collision
+router.get('/stats', authenticate, getUserStats);
+
 router.get('/:portfolioId', authenticate, getPortfolio);
 router.put('/:portfolioId', authenticate, updatePortfolio);
 router.delete('/:portfolioId', authenticate, deletePortfolio);
+
+// Closed positions and transfers
+router.get('/:portfolioId/closed-positions', authenticate, getPortfolioClosedPositions);
+router.get('/:portfolioId/transfers', authenticate, getPortfolioTransfers);
 
 // Trade routes
 router.post('/:portfolioId/trades', authenticate, addTrade);
