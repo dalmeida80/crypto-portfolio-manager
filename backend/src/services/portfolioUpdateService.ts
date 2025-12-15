@@ -22,9 +22,6 @@ interface TradeMetrics {
   numberOfTrades: number;
 }
 
-// Dust threshold - positions smaller than this are considered closed
-const DUST_THRESHOLD = 0.001;
-
 export class PortfolioUpdateService {
   private priceService: PriceService;
 
@@ -230,7 +227,7 @@ export class PortfolioUpdateService {
         // Withdrawal: remove quantity proportionally
         const newQuantity = existing.quantity - event.quantity;
         
-        if (newQuantity <= DUST_THRESHOLD) {
+        if (newQuantity <= 0.00000001) {
           holdings.delete(symbol);
           console.log(`  📤 WITHDRAWAL ${event.quantity} ${symbol} (position closed)`);
         } else {
@@ -262,12 +259,12 @@ export class PortfolioUpdateService {
         // Sell: reduce position
         const newQuantity = existing.quantity - event.quantity;
         
-        if (newQuantity <= DUST_THRESHOLD) {
+        if (newQuantity <= 0.00000001) {
           // Position fully closed - create closed position record
           const metrics = this.calculateTradeMetrics(trades, symbol);
           await this.createClosedPosition(portfolioId, symbol, metrics);
           holdings.delete(symbol);
-          console.log(`  🔴 SELL ${event.quantity} ${symbol} @ $${(event.total/event.quantity).toFixed(4)} (position CLOSED - dust removed)`);
+          console.log(`  🔴 SELL ${event.quantity} ${symbol} @ $${(event.total/event.quantity).toFixed(4)} (position CLOSED)`);
         } else {
           // Partial sell - reduce proportionally
           const soldProportion = event.quantity / existing.quantity;
@@ -493,8 +490,8 @@ export class PortfolioUpdateService {
     const result = [];
 
     for (const [symbol, holding] of holdings) {
-      // Skip holdings with dust quantities
-      if (holding.quantity < DUST_THRESHOLD) {
+      // Skip holdings with very small quantities (dust)
+      if (holding.quantity < 0.00000001) {
         continue;
       }
 
