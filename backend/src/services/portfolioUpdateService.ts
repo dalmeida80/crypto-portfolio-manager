@@ -1,6 +1,7 @@
 import { AppDataSource } from '../index';
 import { Portfolio } from '../entities/Portfolio';
 import { Trade } from '../entities/Trade';
+import { ClosedPosition } from '../entities/ClosedPosition';
 import { PriceService } from './priceService';
 
 interface HoldingPosition {
@@ -8,6 +9,16 @@ interface HoldingPosition {
   quantity: number;
   averagePrice: number;
   totalInvested: number;
+}
+
+interface TradeMetrics {
+  totalBought: number;
+  totalSold: number;
+  totalInvested: number;
+  totalReceived: number;
+  firstBuyDate: Date;
+  lastSellDate: Date;
+  numberOfTrades: number;
 }
 
 export class PortfolioUpdateService {
@@ -36,9 +47,100 @@ export class PortfolioUpdateService {
   }
 
   /**
+   * Calculate metrics for a symbol (to detect closed positions)
+   */
+  private calculateTradeMetrics(trades: Trade[], symbol: string): TradeMetrics {
+    const symbolTrades = trades.filter(t => t.symbol.toUpperCase() === symbol);
+    
+    let totalBought = 0;
+    let totalSold = 0;
+    let totalInvested = 0;
+    let totalReceived = 0;
+    let firstBuyDate: Date | null = null;
+    let lastSellDate: Date | null = null;
+
+    for (const trade of symbolTrades) {
+      if (trade.type === 'BUY') {
+        totalBought += trade.quantity;
+        totalInvested += trade.total + (trade.fee || 0);
+        if (!firstBuyDate || new Date(trade.executedAt) < firstBuyDate) {
+          firstBuyDate = new Date(trade.executedAt);
+        }
+      } else if (trade.type === 'SELL') {
+        totalSold += trade.quantity;
+        totalReceived += trade.total - (trade.fee || 0);
+        if (!lastSellDate || new Date(trade.executedAt) > lastSellDate) {
+          lastSellDate = new Date(trade.executedAt);
+        }
+      }
+    }
+
+    return {
+      totalBought,
+      totalSold,
+      totalInvested,
+      totalReceived,
+      firstBuyDate: firstBuyDate || new Date(),
+      lastSellDate: lastSellDate || new Date(),
+      numberOfTrades: symbolTrades.length
+    };
+  }
+
+  /**
+   * Create closed position record when position is fully sold
+   */
+  private async createClosedPosition(
+    portfolioId: string,
+    symbol: string,
+    metrics: TradeMetrics
+  ): Promise<void> {
+    const closedPositionRepo = AppDataSource.getRepository(ClosedPosition);
+
+    // Check if already exists
+    const existing = await closedPositionRepo.findOne({
+      where: { portfolioId, symbol: symbol.toUpperCase() }
+    });
+
+    if (existing) {
+      // Update existing
+      existing.totalBought = metrics.totalBought;
+      existing.totalSold = metrics.totalSold;
+      existing.totalInvested = metrics.totalInvested;
+      existing.totalReceived = metrics.totalReceived;
+      existing.realizedProfitLoss = metrics.totalReceived - metrics.totalInvested;
+      existing.realizedProfitLossPercentage = (existing.realizedProfitLoss / metrics.totalInvested) * 100;
+      existing.averageBuyPrice = metrics.totalInvested / metrics.totalBought;
+      existing.averageSellPrice = metrics.totalReceived / metrics.totalSold;
+      existing.closedAt = metrics.lastSellDate;
+      existing.numberOfTrades = metrics.numberOfTrades;
+      await closedPositionRepo.save(existing);
+      return;
+    }
+
+    // Create new
+    const closedPosition = new ClosedPosition();
+    closedPosition.portfolioId = portfolioId;
+    closedPosition.symbol = symbol.toUpperCase();
+    closedPosition.totalBought = metrics.totalBought;
+    closedPosition.totalSold = metrics.totalSold;
+    closedPosition.averageBuyPrice = metrics.totalInvested / metrics.totalBought;
+    closedPosition.averageSellPrice = metrics.totalReceived / metrics.totalSold;
+    closedPosition.totalInvested = metrics.totalInvested;
+    closedPosition.totalReceived = metrics.totalReceived;
+    closedPosition.realizedProfitLoss = metrics.totalReceived - metrics.totalInvested;
+    closedPosition.realizedProfitLossPercentage = (closedPosition.realizedProfitLoss / metrics.totalInvested) * 100;
+    closedPosition.openedAt = metrics.firstBuyDate;
+    closedPosition.closedAt = metrics.lastSellDate;
+    closedPosition.numberOfTrades = metrics.numberOfTrades;
+
+    await closedPositionRepo.save(closedPosition);
+    console.log(`Created closed position for ${symbol}: P/L=${closedPosition.realizedProfitLoss.toFixed(2)}`);
+  }
+
+  /**
    * Calculate current holdings from trades
    */
-  private calculateHoldings(trades: Trade[]): Map<string, HoldingPosition> {
+  private async calculateHoldings(portfolioId: string, trades: Trade[]): Promise<Map<string, HoldingPosition>> {
     const holdings = new Map<string, HoldingPosition>();
 
     // Sort trades by execution date
@@ -73,6 +175,9 @@ export class PortfolioUpdateService {
         
         // Consider position closed if quantity is very small (< 0.00000001)
         if (newQuantity <= 0.00000001) {
+          // Calculate full metrics and create closed position
+          const metrics = this.calculateTradeMetrics(trades, symbol);
+          await this.createClosedPosition(portfolioId, symbol, metrics);
           holdings.delete(symbol);
         } else {
           // Reduce proportionally
@@ -90,6 +195,19 @@ export class PortfolioUpdateService {
     }
 
     return holdings;
+  }
+
+  /**
+   * Get total realized P/L from closed positions
+   */
+  async getTotalRealizedPL(portfolioId: string): Promise<number> {
+    const closedPositionRepo = AppDataSource.getRepository(ClosedPosition);
+    
+    const closedPositions = await closedPositionRepo.find({
+      where: { portfolioId }
+    });
+
+    return closedPositions.reduce((sum, pos) => sum + pos.realizedProfitLoss, 0);
   }
 
   /**
@@ -116,7 +234,6 @@ export class PortfolioUpdateService {
    */
   async updatePortfolio(portfolioId: string): Promise<Portfolio> {
     const portfolioRepo = AppDataSource.getRepository(Portfolio);
-    const tradeRepo = AppDataSource.getRepository(Trade);
 
     // Fetch portfolio with trades
     const portfolio = await portfolioRepo.findOne({
@@ -128,14 +245,17 @@ export class PortfolioUpdateService {
       throw new Error(`Portfolio ${portfolioId} not found`);
     }
 
-    // Calculate holdings
-    const holdings = this.calculateHoldings(portfolio.trades);
+    // Calculate holdings (this will create closed positions if needed)
+    const holdings = await this.calculateHoldings(portfolioId, portfolio.trades);
+
+    // Get realized P/L from closed positions
+    const realizedPL = await this.getTotalRealizedPL(portfolioId);
 
     if (holdings.size === 0) {
-      // No active positions
+      // No active positions, but may have realized P/L
       portfolio.totalInvested = 0;
       portfolio.currentValue = 0;
-      portfolio.profitLoss = 0;
+      portfolio.profitLoss = realizedPL; // Only realized P/L
       await portfolioRepo.save(portfolio);
       return portfolio;
     }
@@ -147,7 +267,7 @@ export class PortfolioUpdateService {
     console.log('Fetched prices for symbols:', symbols);
     console.log('Prices received:', prices);
 
-    // Calculate totals
+    // Calculate totals for open positions
     let totalInvested = 0;
     let currentValue = 0;
 
@@ -167,16 +287,23 @@ export class PortfolioUpdateService {
       }
     }
 
-    const profitLoss = currentValue - totalInvested;
+    // Unrealized P/L (open positions) + Realized P/L (closed positions)
+    const unrealizedPL = currentValue - totalInvested;
+    const totalPL = unrealizedPL + realizedPL;
 
     // Update portfolio
     portfolio.totalInvested = totalInvested;
     portfolio.currentValue = currentValue;
-    portfolio.profitLoss = profitLoss;
+    portfolio.profitLoss = totalPL; // Total P/L includes both unrealized and realized
 
     await portfolioRepo.save(portfolio);
 
-    console.log(`Updated portfolio ${portfolio.name}: invested=${totalInvested.toFixed(2)}, current=${currentValue.toFixed(2)}, P/L=${profitLoss.toFixed(2)}`);
+    console.log(`Updated portfolio ${portfolio.name}:`);
+    console.log(`  - Open invested: $${totalInvested.toFixed(2)}`);
+    console.log(`  - Current value: $${currentValue.toFixed(2)}`);
+    console.log(`  - Unrealized P/L: $${unrealizedPL.toFixed(2)}`);
+    console.log(`  - Realized P/L: $${realizedPL.toFixed(2)}`);
+    console.log(`  - Total P/L: $${totalPL.toFixed(2)}`);
 
     return portfolio;
   }
@@ -252,7 +379,7 @@ export class PortfolioUpdateService {
       throw new Error(`Portfolio ${portfolioId} not found`);
     }
 
-    const holdings = this.calculateHoldings(portfolio.trades);
+    const holdings = await this.calculateHoldings(portfolioId, portfolio.trades);
     const symbols = Array.from(holdings.keys());
     
     if (symbols.length === 0) {
@@ -296,6 +423,20 @@ export class PortfolioUpdateService {
     }
 
     return result.sort((a, b) => b.currentValue - a.currentValue);
+  }
+
+  /**
+   * Get closed positions for a portfolio
+   */
+  async getClosedPositions(portfolioId: string): Promise<ClosedPosition[]> {
+    const closedPositionRepo = AppDataSource.getRepository(ClosedPosition);
+    
+    const closedPositions = await closedPositionRepo.find({
+      where: { portfolioId },
+      order: { closedAt: 'DESC' }
+    });
+
+    return closedPositions;
   }
 
   /**
