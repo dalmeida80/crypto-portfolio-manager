@@ -10,6 +10,22 @@ const formatNumber = (value: number | null | undefined, decimals: number = 2): s
   return (value ?? 0).toFixed(decimals);
 };
 
+// Smart price formatting based on value magnitude
+const formatPrice = (value: number | null | undefined): string => {
+  if (value === null || value === undefined) return '0.00';
+  
+  // For very small values (< 0.01), use more decimals
+  if (value < 0.01) {
+    return value.toFixed(8); // Up to 8 decimals for small coins
+  }
+  // For values < 1, use 4 decimals
+  if (value < 1) {
+    return value.toFixed(4);
+  }
+  // For normal values, use 2 decimals
+  return value.toFixed(2);
+};
+
 const PortfolioDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -103,11 +119,14 @@ const PortfolioDetail: React.FC = () => {
     try {
       const result = await apiService.importAllTrades(id!, importForm.startDate || undefined);
       
+      const depositsInfo = result.depositsImported ? `Deposits found: ${result.depositsImported} (informational)\n` : '';
+      const withdrawalsInfo = result.withdrawalsImported ? `Withdrawals found: ${result.withdrawalsImported} (informational)` : '';
+      
       setSuccessMessage(
         `✅ Import completed!\n` +
-        `Trades: ${result.tradesImported}\n` +
-        `Deposits: ${result.depositsImported}\n` +
-        `Withdrawals: ${result.withdrawalsImported}`
+        `Trades imported: ${result.imported}\n` +
+        depositsInfo +
+        withdrawalsInfo
       );
 
       setShowImportForm(false);
@@ -126,8 +145,13 @@ const PortfolioDetail: React.FC = () => {
   const handleRefreshPrices = async () => {
     try {
       setError(null);
+      setSuccessMessage(null);
       await apiService.refreshPortfolio(id!);
       await fetchPortfolioData();
+      setSuccessMessage('✅ Prices refreshed successfully!');
+      
+      // Clear message after 3 seconds
+      setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to refresh prices');
     }
@@ -202,9 +226,9 @@ const PortfolioDetail: React.FC = () => {
             <div className="import-info">
               <h3>ℹ️ What will be imported:</h3>
               <ul>
-                <li>✅ Spot trades (BUY/SELL)</li>
-                <li>✅ Crypto deposits</li>
-                <li>✅ Crypto withdrawals</li>
+                <li>✅ Spot trades (BUY/SELL) - Used for P/L calculation</li>
+                <li>📊 Deposits detected (informational only)</li>
+                <li>📊 Withdrawals detected (informational only)</li>
                 <li>⚠️ Rate limit: ~1200 requests/minute</li>
               </ul>
             </div>
@@ -368,8 +392,8 @@ const PortfolioDetail: React.FC = () => {
                   <tr key={holding.symbol}>
                     <td><strong>{holding.symbol}</strong></td>
                     <td>{formatNumber(holding.quantity, 8)}</td>
-                    <td>${formatNumber(holding.averagePrice)}</td>
-                    <td className="current-price">${formatNumber(holding.currentPrice)}</td>
+                    <td>${formatPrice(holding.averagePrice)}</td>
+                    <td className="current-price">${formatPrice(holding.currentPrice)}</td>
                     <td>${formatNumber(holding.totalInvested)}</td>
                     <td>${formatNumber(holding.currentValue)}</td>
                     <td className={holding.profitLoss >= 0 ? 'positive' : 'negative'}>
@@ -418,8 +442,8 @@ const PortfolioDetail: React.FC = () => {
                       {trade.type}
                     </td>
                     <td>{formatNumber(trade.quantity, 8)}</td>
-                    <td>${formatNumber(trade.price)}</td>
-                    <td>${formatNumber(trade.fee)}</td>
+                    <td>${formatPrice(trade.price)}</td>
+                    <td>${formatNumber(trade.fee, 4)}</td>
                     <td>${formatNumber(trade.total)}</td>
                     <td>
                       {trade.source && (
