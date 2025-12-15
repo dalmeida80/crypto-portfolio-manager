@@ -25,8 +25,8 @@ interface ImportResult {
   skipped: number;
   errors: number;
   trades: Trade[];
-  deposits?: number;
-  withdrawals?: number;
+  depositsImported?: number;
+  withdrawalsImported?: number;
   message: string;
 }
 
@@ -40,6 +40,7 @@ export class TradeImportService {
   /**
    * Import ALL trades from Binance for a specific portfolio
    * Now uses getAllMyTrades() to fetch everything
+   * NOTE: Deposits and withdrawals are fetched but NOT imported as trades
    */
   async importTrades(
     portfolioId: string,
@@ -100,12 +101,11 @@ export class TradeImportService {
 
       console.log(`Total trades fetched from Binance: ${allBinanceTrades.length}`);
 
-      // Fetch deposits
+      // Fetch deposits and withdrawals (for logging/stats only, not importing)
       console.log('Fetching deposit history...');
       const deposits = await binance.getDepositHistory(startTime);
       console.log(`Total deposits: ${deposits.length}`);
 
-      // Fetch withdrawals
       console.log('Fetching withdrawal history...');
       const withdrawals = await binance.getWithdrawHistory(startTime);
       console.log(`Total withdrawals: ${withdrawals.length}`);
@@ -148,7 +148,7 @@ export class TradeImportService {
       let skipped = 0;
       const importedTrades: Trade[] = [];
 
-      // Import regular trades
+      // Import ONLY regular trades (BUY/SELL)
       for (const binanceTrade of filteredTrades) {
         const externalId = `binance-${binanceTrade.id}`;
 
@@ -175,74 +175,10 @@ export class TradeImportService {
         imported++;
       }
 
-      // Import deposits as BUY trades
-      let depositsImported = 0;
-      for (const deposit of deposits) {
-        const externalId = `binance-deposit-${deposit.txId || deposit.id}`;
-        
-        if (existingExternalIds.has(externalId)) {
-          skipped++;
-          continue;
-        }
-
-        // Create synthetic symbol (e.g., BTCUSDT for BTC deposit)
-        const symbol = `${deposit.coin}USDT`;
-        
-        const trade = new Trade();
-        trade.portfolioId = portfolioId;
-        trade.symbol = symbol;
-        trade.type = 'BUY';
-        trade.quantity = parseFloat(deposit.amount);
-        trade.price = 0; // Deposits don't have a purchase price
-        trade.fee = 0;
-        trade.total = 0;
-        trade.executedAt = new Date(deposit.insertTime || deposit.time);
-        trade.externalId = externalId;
-        trade.source = 'binance-deposit';
-        trade.notes = `Deposit: ${deposit.coin}`;
-
-        await tradeRepo.save(trade);
-        importedTrades.push(trade);
-        depositsImported++;
-        imported++;
-      }
-
-      // Import withdrawals as SELL trades
-      let withdrawalsImported = 0;
-      for (const withdrawal of withdrawals) {
-        const externalId = `binance-withdrawal-${withdrawal.id}`;
-        
-        if (existingExternalIds.has(externalId)) {
-          skipped++;
-          continue;
-        }
-
-        // Create synthetic symbol
-        const symbol = `${withdrawal.coin}USDT`;
-        
-        const trade = new Trade();
-        trade.portfolioId = portfolioId;
-        trade.symbol = symbol;
-        trade.type = 'SELL';
-        trade.quantity = parseFloat(withdrawal.amount);
-        trade.price = 0;
-        trade.fee = parseFloat(withdrawal.transactionFee || 0);
-        trade.total = 0;
-        trade.executedAt = new Date(withdrawal.completeTime || withdrawal.applyTime);
-        trade.externalId = externalId;
-        trade.source = 'binance-withdrawal';
-        trade.notes = `Withdrawal: ${withdrawal.coin}`;
-
-        await tradeRepo.save(trade);
-        importedTrades.push(trade);
-        withdrawalsImported++;
-        imported++;
-      }
-
       console.log(`Import complete:`);
-      console.log(`  - Trades: ${imported - depositsImported - withdrawalsImported}`);
-      console.log(`  - Deposits: ${depositsImported}`);
-      console.log(`  - Withdrawals: ${withdrawalsImported}`);
+      console.log(`  - Trades: ${imported}`);
+      console.log(`  - Deposits: ${deposits.length} (not imported)`);
+      console.log(`  - Withdrawals: ${withdrawals.length} (not imported)`);
       console.log(`  - Total imported: ${imported}`);
       console.log(`  - Skipped (duplicates): ${skipped}`);
 
@@ -258,9 +194,9 @@ export class TradeImportService {
         skipped,
         errors: 0,
         trades: importedTrades,
-        deposits: depositsImported,
-        withdrawals: withdrawalsImported,
-        message: `Successfully imported ${imported} items (${imported - depositsImported - withdrawalsImported} trades, ${depositsImported} deposits, ${withdrawalsImported} withdrawals). ${skipped} already existed.`
+        depositsImported: deposits.length,
+        withdrawalsImported: withdrawals.length,
+        message: `Successfully imported ${imported} trades. Found ${deposits.length} deposits and ${withdrawals.length} withdrawals (informational only). ${skipped} already existed.`
       };
 
     } catch (error: any) {
@@ -321,8 +257,8 @@ export class TradeImportService {
       totalImported += result.imported;
       totalSkipped += result.skipped;
       totalErrors += result.errors;
-      totalDeposits += result.deposits || 0;
-      totalWithdrawals += result.withdrawals || 0;
+      totalDeposits += result.depositsImported || 0;
+      totalWithdrawals += result.withdrawalsImported || 0;
       allTrades.push(...result.trades);
     }
 
@@ -332,9 +268,9 @@ export class TradeImportService {
       skipped: totalSkipped,
       errors: totalErrors,
       trades: allTrades,
-      deposits: totalDeposits,
-      withdrawals: totalWithdrawals,
-      message: `Imported ${totalImported} items from ${apiKeys.length} API key(s) (${totalImported - totalDeposits - totalWithdrawals} trades, ${totalDeposits} deposits, ${totalWithdrawals} withdrawals)`
+      depositsImported: totalDeposits,
+      withdrawalsImported: totalWithdrawals,
+      message: `Imported ${totalImported} trades from ${apiKeys.length} API key(s). Found ${totalDeposits} deposits and ${totalWithdrawals} withdrawals (informational).`
     };
   }
 
@@ -344,8 +280,6 @@ export class TradeImportService {
   async getImportStatus(portfolioId: string): Promise<{
     totalTrades: number;
     binanceTrades: number;
-    deposits: number;
-    withdrawals: number;
     manualTrades: number;
     lastImportDate: Date | null;
     oldestTrade: Date | null;
@@ -359,15 +293,11 @@ export class TradeImportService {
     });
 
     const binanceTrades = trades.filter(t => t.source === 'binance');
-    const deposits = trades.filter(t => t.source === 'binance-deposit');
-    const withdrawals = trades.filter(t => t.source === 'binance-withdrawal');
     const manualTrades = trades.filter(t => !t.source || t.source === 'manual');
 
     return {
       totalTrades: trades.length,
       binanceTrades: binanceTrades.length,
-      deposits: deposits.length,
-      withdrawals: withdrawals.length,
       manualTrades: manualTrades.length,
       lastImportDate: binanceTrades.length > 0 ? binanceTrades[0].createdAt : null,
       oldestTrade: trades.length > 0 ? trades[trades.length - 1].executedAt : null,
