@@ -2,11 +2,7 @@ import { Response } from 'express';
 import { AppDataSource } from '../index';
 import { Portfolio } from '../entities/Portfolio';
 import { Trade } from '../entities/Trade';
-import { Transfer } from '../entities/Transfer';
-import { PortfolioUpdateService } from '../services/portfolioUpdateService';
 import { AuthRequest } from '../middleware/auth';
-
-const portfolioUpdateService = new PortfolioUpdateService();
 
 export const createPortfolio = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -126,120 +122,6 @@ export const deletePortfolio = async (req: AuthRequest, res: Response): Promise<
     res.json({ message: 'Portfolio deleted successfully' });
   } catch (error) {
     console.error('Delete portfolio error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
-
-/**
- * Get deposits and withdrawals (transfers) for a portfolio
- */
-export const getPortfolioTransfers = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.user!.userId;
-    const { portfolioId } = req.params;
-
-    // Verify portfolio ownership
-    const portfolioRepo = AppDataSource.getRepository(Portfolio);
-    const portfolio = await portfolioRepo.findOne({
-      where: { id: portfolioId, userId },
-    });
-
-    if (!portfolio) {
-      res.status(404).json({ error: 'Portfolio not found' });
-      return;
-    }
-
-    // Get transfers
-    const transferRepo = AppDataSource.getRepository(Transfer);
-    const transfers = await transferRepo.find({
-      where: { portfolioId },
-      order: { executedAt: 'DESC' },
-    });
-
-    res.json(transfers);
-  } catch (error) {
-    console.error('Get portfolio transfers error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
-
-/**
- * Get closed positions (fully sold assets) for a portfolio
- */
-export const getClosedPositions = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.user!.userId;
-    const { portfolioId } = req.params;
-
-    // Verify portfolio ownership
-    const portfolioRepo = AppDataSource.getRepository(Portfolio);
-    const portfolio = await portfolioRepo.findOne({
-      where: { id: portfolioId, userId },
-    });
-
-    if (!portfolio) {
-      res.status(404).json({ error: 'Portfolio not found' });
-      return;
-    }
-
-    // Get closed positions
-    const closedPositions = await portfolioUpdateService.getClosedPositions(portfolioId);
-
-    res.json(closedPositions);
-  } catch (error) {
-    console.error('Get closed positions error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
-
-/**
- * Get aggregated stats for all user portfolios (deposits, withdrawals, fees)
- */
-export const getUserStats = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.user!.userId;
-
-    // Get all user portfolios
-    const portfolioRepo = AppDataSource.getRepository(Portfolio);
-    const portfolios = await portfolioRepo.find({
-      where: { userId },
-    });
-
-    const portfolioIds = portfolios.map(p => p.id);
-
-    // Get all transfers
-    const transferRepo = AppDataSource.getRepository(Transfer);
-    const allTransfers = await transferRepo
-      .createQueryBuilder('transfer')
-      .where('transfer.portfolioId IN (:...portfolioIds)', { portfolioIds })
-      .getMany();
-
-    // Calculate deposits and withdrawals totals
-    const deposits = allTransfers.filter(t => t.type === 'DEPOSIT');
-    const withdrawals = allTransfers.filter(t => t.type === 'WITHDRAWAL');
-
-    const totalDeposits = deposits.reduce((sum, t) => sum + parseFloat(t.amount.toString()), 0);
-    const totalWithdrawals = withdrawals.reduce((sum, t) => sum + parseFloat(t.amount.toString()), 0);
-
-    // Get all trades to calculate fees
-    const tradeRepo = AppDataSource.getRepository(Trade);
-    const allTrades = await tradeRepo
-      .createQueryBuilder('trade')
-      .where('trade.portfolioId IN (:...portfolioIds)', { portfolioIds })
-      .getMany();
-
-    const totalFees = allTrades.reduce((sum, t) => sum + (parseFloat(t.fee?.toString() || '0')), 0);
-
-    res.json({
-      totalDeposits: parseFloat(totalDeposits.toFixed(8)),
-      totalWithdrawals: parseFloat(totalWithdrawals.toFixed(8)),
-      totalFees: parseFloat(totalFees.toFixed(8)),
-      depositsCount: deposits.length,
-      withdrawalsCount: withdrawals.length,
-      tradesCount: allTrades.length,
-    });
-  } catch (error) {
-    console.error('Get user stats error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
