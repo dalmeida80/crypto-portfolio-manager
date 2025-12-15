@@ -6,6 +6,7 @@ import {
   getPortfolio,
   updatePortfolio,
   deletePortfolio,
+  getPortfolioTransfers,
 } from '../controllers/portfolioController';
 import {
   addTrade,
@@ -30,6 +31,9 @@ router.delete('/:portfolioId', authenticate, deletePortfolio);
 router.post('/:portfolioId/trades', authenticate, addTrade);
 router.get('/:portfolioId/trades', authenticate, listTrades);
 router.delete('/:portfolioId/trades/:tradeId', authenticate, deleteTrade);
+
+// Transfers routes (deposits & withdrawals)
+router.get('/:portfolioId/transfers', authenticate, getPortfolioTransfers);
 
 // Sync and analytics
 router.post('/:portfolioId/sync', authenticate, syncBinanceTrades);
