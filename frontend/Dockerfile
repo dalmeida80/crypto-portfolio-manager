@@ -3,6 +3,9 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
+# Add build arg to bust cache
+ARG CACHEBUST=1
+
 COPY package.json .
 
 RUN npm install
