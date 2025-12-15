@@ -18,6 +18,24 @@ export class PortfolioUpdateService {
   }
 
   /**
+   * Format symbol with slash separator
+   * Examples: BTCUSDT -> BTC/USDT, SAGAUSDC -> SAGA/USDC
+   */
+  private formatSymbolWithSlash(symbol: string): string {
+    const upper = symbol.toUpperCase();
+    const quoteAssets = ['USDT', 'USDC', 'BUSD', 'TUSD', 'FDUSD', 'EUR', 'BTC', 'ETH', 'BNB'];
+    
+    for (const quote of quoteAssets) {
+      if (upper.endsWith(quote)) {
+        const base = upper.slice(0, -quote.length);
+        return `${base}/${quote}`;
+      }
+    }
+    
+    return upper;
+  }
+
+  /**
    * Calculate current holdings from trades
    */
   private calculateHoldings(trades: Trade[]): Map<string, HoldingPosition> {
@@ -53,8 +71,8 @@ export class PortfolioUpdateService {
         // Reduce position
         const newQuantity = existing.quantity - trade.quantity;
         
-        if (newQuantity <= 0) {
-          // Position closed
+        // Consider position closed if quantity is very small (< 0.00000001)
+        if (newQuantity <= 0.00000001) {
           holdings.delete(symbol);
         } else {
           // Reduce proportionally
@@ -72,6 +90,25 @@ export class PortfolioUpdateService {
     }
 
     return holdings;
+  }
+
+  /**
+   * Calculate total fees from all trades
+   */
+  async getTotalFees(portfolioId: string): Promise<number> {
+    const portfolioRepo = AppDataSource.getRepository(Portfolio);
+    
+    const portfolio = await portfolioRepo.findOne({
+      where: { id: portfolioId },
+      relations: ['trades']
+    });
+
+    if (!portfolio) {
+      throw new Error(`Portfolio ${portfolioId} not found`);
+    }
+
+    const totalFees = portfolio.trades.reduce((sum, trade) => sum + (trade.fee || 0), 0);
+    return totalFees;
   }
 
   /**
@@ -230,6 +267,11 @@ export class PortfolioUpdateService {
     const result = [];
 
     for (const [symbol, holding] of holdings) {
+      // Skip holdings with very small quantities (dust)
+      if (holding.quantity < 0.00000001) {
+        continue;
+      }
+
       const normalizedSymbol = this.normalizeSymbol(symbol);
       const currentPrice = prices[normalizedSymbol];
       
@@ -242,7 +284,7 @@ export class PortfolioUpdateService {
       const profitLossPercentage = (profitLoss / holding.totalInvested) * 100;
 
       result.push({
-        symbol,
+        symbol: this.formatSymbolWithSlash(symbol), // Format with slash
         quantity: holding.quantity,
         averagePrice: holding.averagePrice,
         currentPrice: priceToUse,
