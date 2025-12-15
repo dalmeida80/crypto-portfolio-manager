@@ -8,6 +8,7 @@ import {
   deletePortfolio,
   getPortfolioTransfers,
   getClosedPositions,
+  getUserStats,
 } from '../controllers/portfolioController';
 import {
   addTrade,
@@ -20,6 +21,9 @@ import {
 } from '../controllers/syncController';
 
 const router = Router();
+
+// User-level routes
+router.get('/stats', authenticate, getUserStats);
 
 // Portfolio routes
 router.post('/', authenticate, createPortfolio);
