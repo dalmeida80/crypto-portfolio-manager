@@ -7,6 +7,7 @@ import {
   updatePortfolio,
   deletePortfolio,
   getPortfolioTransfers,
+  getClosedPositions,
 } from '../controllers/portfolioController';
 import {
   addTrade,
@@ -34,6 +35,9 @@ router.delete('/:portfolioId/trades/:tradeId', authenticate, deleteTrade);
 
 // Transfers routes (deposits & withdrawals)
 router.get('/:portfolioId/transfers', authenticate, getPortfolioTransfers);
+
+// Closed positions route (realized P/L)
+router.get('/:portfolioId/closed-positions', authenticate, getClosedPositions);
 
 // Sync and analytics
 router.post('/:portfolioId/sync', authenticate, syncBinanceTrades);
