@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { User } from './User';
 import { Trade } from './Trade';
 import { Transfer } from './Transfer';
+import { ClosedPosition } from './ClosedPosition';
 
 @Entity('portfolios')
 export class Portfolio {
@@ -62,6 +63,9 @@ export class Portfolio {
 
   @OneToMany(() => Transfer, transfer => transfer.portfolio)
   transfers!: Transfer[];
+
+  @OneToMany(() => ClosedPosition, closedPosition => closedPosition.portfolio)
+  closedPositions!: ClosedPosition[];
 
   @CreateDateColumn()
   createdAt!: Date;
