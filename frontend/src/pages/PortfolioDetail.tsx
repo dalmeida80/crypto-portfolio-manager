@@ -7,23 +7,25 @@ import '../styles/PortfolioDetail.css';
 
 // Helper function to safely format numbers
 const formatNumber = (value: number | null | undefined, decimals: number = 2): string => {
-  return (value ?? 0).toFixed(decimals);
+  const num = value ?? 0;
+  return typeof num === 'number' ? num.toFixed(decimals) : '0.00';
 };
 
 // Smart price formatting based on value magnitude
 const formatPrice = (value: number | null | undefined): string => {
-  if (value === null || value === undefined) return '0.00';
+  const num = value ?? 0;
+  if (typeof num !== 'number' || isNaN(num)) return '0.00';
   
   // For very small values (< 0.01), use more decimals
-  if (value < 0.01) {
-    return value.toFixed(8); // Up to 8 decimals for small coins
+  if (num < 0.01) {
+    return num.toFixed(8); // Up to 8 decimals for small coins
   }
   // For values < 1, use 4 decimals
-  if (value < 1) {
-    return value.toFixed(4);
+  if (num < 1) {
+    return num.toFixed(4);
   }
   // For normal values, use 2 decimals
-  return value.toFixed(2);
+  return num.toFixed(2);
 };
 
 const PortfolioDetail: React.FC = () => {
@@ -169,8 +171,11 @@ const PortfolioDetail: React.FC = () => {
     return <div className="portfolio-detail">Portfolio not found</div>;
   }
 
-  const profitLossPercentage = portfolio.totalInvested > 0
-    ? ((portfolio.profitLoss / portfolio.totalInvested) * 100)
+  // Safely calculate profit/loss percentage
+  const totalInvested = portfolio.totalInvested ?? 0;
+  const profitLoss = portfolio.profitLoss ?? 0;
+  const profitLossPercentage = totalInvested > 0
+    ? ((profitLoss / totalInvested) * 100)
     : 0;
 
   return (
@@ -354,8 +359,8 @@ const PortfolioDetail: React.FC = () => {
         </div>
         <div className="stat-card">
           <h3>Profit/Loss</h3>
-          <p className={`stat-value ${portfolio.profitLoss >= 0 ? 'positive' : 'negative'}`}>
-            ${formatNumber(portfolio.profitLoss)}
+          <p className={`stat-value ${profitLoss >= 0 ? 'positive' : 'negative'}`}>
+            ${formatNumber(profitLoss)}
             <span className="percentage">
               ({profitLossPercentage >= 0 ? '+' : ''}{formatNumber(profitLossPercentage)}%)
             </span>
@@ -396,11 +401,11 @@ const PortfolioDetail: React.FC = () => {
                     <td className="current-price">${formatPrice(holding.currentPrice)}</td>
                     <td>${formatNumber(holding.totalInvested)}</td>
                     <td>${formatNumber(holding.currentValue)}</td>
-                    <td className={holding.profitLoss >= 0 ? 'positive' : 'negative'}>
+                    <td className={(holding.profitLoss ?? 0) >= 0 ? 'positive' : 'negative'}>
                       ${formatNumber(holding.profitLoss)}
                     </td>
-                    <td className={holding.profitLossPercentage >= 0 ? 'positive' : 'negative'}>
-                      {holding.profitLossPercentage >= 0 ? '+' : ''}{formatNumber(holding.profitLossPercentage)}%
+                    <td className={(holding.profitLossPercentage ?? 0) >= 0 ? 'positive' : 'negative'}>
+                      {(holding.profitLossPercentage ?? 0) >= 0 ? '+' : ''}{formatNumber(holding.profitLossPercentage)}%
                     </td>
                   </tr>
                 ))}
