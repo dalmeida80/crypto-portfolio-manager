@@ -8,6 +8,7 @@ import {
   deletePortfolio,
   getPortfolioClosedPositions,
   getPortfolioTransfers,
+  getPortfolioStats,
   getUserStats,
 } from '../controllers/portfolioController';
 import {
@@ -26,12 +27,15 @@ const router = Router();
 router.post('/', authenticate, createPortfolio);
 router.get('/', authenticate, listPortfolios);
 
-// Stats endpoint - must be before /:portfolioId to avoid collision
+// Global user stats endpoint - must be before /:portfolioId to avoid collision
 router.get('/stats', authenticate, getUserStats);
 
 router.get('/:portfolioId', authenticate, getPortfolio);
 router.put('/:portfolioId', authenticate, updatePortfolio);
 router.delete('/:portfolioId', authenticate, deletePortfolio);
+
+// Portfolio-specific stats
+router.get('/:portfolioId/stats', authenticate, getPortfolioStats);
 
 // Closed positions and transfers
 router.get('/:portfolioId/closed-positions', authenticate, getPortfolioClosedPositions);
