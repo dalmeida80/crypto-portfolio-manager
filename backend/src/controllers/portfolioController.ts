@@ -218,6 +218,112 @@ export const getPortfolioTransfers = async (
 };
 
 /**
+ * Get detailed stats for a specific portfolio
+ * GET /portfolios/:portfolioId/stats
+ */
+export const getPortfolioStats = async (
+  req: AuthRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const { portfolioId } = req.params;
+
+    // Verify portfolio ownership
+    const portfolioRepo = AppDataSource.getRepository(Portfolio);
+    const portfolio = await portfolioRepo.findOne({
+      where: { id: portfolioId, userId },
+      relations: ['trades'],
+    });
+
+    if (!portfolio) {
+      res.status(404).json({ error: 'Portfolio not found' });
+      return;
+    }
+
+    // Calculate total fees from trades
+    const totalTradesFees = portfolio.trades.reduce(
+      (sum, trade) => sum + (trade.fee || 0),
+      0
+    );
+
+    // Get transfers
+    const transferRepo = AppDataSource.getRepository(Transfer);
+    const transfers = await transferRepo.find({
+      where: { portfolioId },
+    });
+
+    let totalDeposits = 0;
+    let totalWithdrawals = 0;
+    let totalTransferFees = 0;
+
+    for (const transfer of transfers) {
+      if (transfer.type === 'DEPOSIT') {
+        totalDeposits += transfer.amount;
+      } else if (transfer.type === 'WITHDRAWAL') {
+        totalWithdrawals += transfer.amount;
+      }
+      totalTransferFees += transfer.fee || 0;
+    }
+
+    const totalFees = totalTradesFees + totalTransferFees;
+
+    // Get closed positions for realized P/L
+    const closedPositionRepo = AppDataSource.getRepository(ClosedPosition);
+    const closedPositions = await closedPositionRepo.find({
+      where: { portfolioId },
+    });
+
+    const totalRealizedProfitLoss = closedPositions.reduce(
+      (sum, cp) => sum + cp.realizedProfitLoss,
+      0
+    );
+
+    // Calculate unrealized P/L
+    const totalUnrealizedProfitLoss =
+      portfolio.currentValue - portfolio.totalInvested;
+
+    // Net invested = deposits - withdrawals
+    const netInvested = totalDeposits - totalWithdrawals;
+
+    // Count trades
+    const totalTrades = portfolio.trades.length;
+    const buyTrades = portfolio.trades.filter((t) => t.type === 'BUY').length;
+    const sellTrades = portfolio.trades.filter((t) => t.type === 'SELL').length;
+
+    res.json({
+      // Money flow
+      totalDeposits,
+      totalWithdrawals,
+      netInvested,
+
+      // Fees
+      totalFees,
+      totalTradesFees,
+      totalTransferFees,
+
+      // P/L
+      totalInvested: portfolio.totalInvested,
+      currentValue: portfolio.currentValue,
+      totalProfitLoss: portfolio.profitLoss,
+      totalRealizedProfitLoss,
+      totalUnrealizedProfitLoss,
+
+      // Trade stats
+      totalTrades,
+      buyTrades,
+      sellTrades,
+
+      // Closed positions
+      closedPositionsCount: closedPositions.length,
+    });
+  } catch (error) {
+    console.error('Get portfolio stats error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/**
  * Get aggregate stats for all user portfolios
  * GET /portfolios/stats
  */
