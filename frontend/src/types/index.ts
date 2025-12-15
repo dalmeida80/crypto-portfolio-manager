@@ -41,7 +41,7 @@ export interface Portfolio {
 export type TradeType = 'BUY' | 'SELL';
 
 export interface Trade {
-  id: number;
+  id: string;
   portfolioId: string;
   symbol: string;
   type: TradeType;
@@ -50,9 +50,10 @@ export interface Trade {
   fee: number;
   total: number;
   executedAt: string;
+  externalId?: string;
+  source?: string;
   notes?: string;
   createdAt: string;
-  updatedAt: string;
 }
 
 export interface CreateTradeDto {
