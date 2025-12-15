@@ -1,20 +1,25 @@
 import { AppDataSource } from '../index';
 import { Portfolio } from '../entities/Portfolio';
 import { Trade } from '../entities/Trade';
+import { Transfer } from '../entities/Transfer';
 import { PriceService } from './priceService';
+import { TradeTimelineService } from './tradeTimelineService';
 
 interface HoldingPosition {
   symbol: string;
   quantity: number;
   averagePrice: number;
   totalInvested: number;
+  realizedProfitLoss: number;
 }
 
 export class PortfolioUpdateService {
   private priceService: PriceService;
+  private timelineService: TradeTimelineService;
 
   constructor() {
     this.priceService = PriceService.getInstance();
+    this.timelineService = new TradeTimelineService();
   }
 
   /**
@@ -36,56 +41,65 @@ export class PortfolioUpdateService {
   }
 
   /**
-   * Calculate current holdings from trades
+   * Calculate current holdings from trades and transfers using timeline service
    */
-  private calculateHoldings(trades: Trade[]): Map<string, HoldingPosition> {
+  private async calculateHoldings(
+    trades: Trade[],
+    transfers: Transfer[],
+    currentPrices: Record<string, number>
+  ): Promise<Map<string, HoldingPosition>> {
     const holdings = new Map<string, HoldingPosition>();
 
-    // Sort trades by execution date
-    const sortedTrades = [...trades].sort(
-      (a, b) => new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime()
-    );
+    // Group trades and transfers by symbol
+    const assetMap = new Map<string, { trades: Trade[]; transfers: Transfer[] }>();
 
-    for (const trade of sortedTrades) {
+    for (const trade of trades) {
       const symbol = trade.symbol.toUpperCase();
-      const existing = holdings.get(symbol) || {
-        symbol,
-        quantity: 0,
-        averagePrice: 0,
-        totalInvested: 0
-      };
+      if (!assetMap.has(symbol)) {
+        assetMap.set(symbol, { trades: [], transfers: [] });
+      }
+      assetMap.get(symbol)!.trades.push(trade);
+    }
 
-      if (trade.type === 'BUY') {
-        // Add to position
-        const newQuantity = existing.quantity + trade.quantity;
-        const newTotalInvested = existing.totalInvested + trade.total;
-        const newAveragePrice = newQuantity > 0 ? newTotalInvested / newQuantity : 0;
+    for (const transfer of transfers) {
+      // Extract base asset from transfer (e.g., "SOL" from transfer)
+      const asset = transfer.asset.toUpperCase();
+      
+      // Find matching symbol (e.g., SOLUSDT, SOLUSDC)
+      let matchingSymbol: string | null = null;
+      for (const [symbol] of assetMap) {
+        if (symbol.startsWith(asset)) {
+          matchingSymbol = symbol;
+          break;
+        }
+      }
 
+      // If no matching trade symbol, create one (assume USDT pair)
+      if (!matchingSymbol) {
+        matchingSymbol = `${asset}USDT`;
+        assetMap.set(matchingSymbol, { trades: [], transfers: [] });
+      }
+
+      assetMap.get(matchingSymbol)!.transfers.push(transfer);
+    }
+
+    // Process each asset's timeline
+    for (const [symbol, { trades: assetTrades, transfers: assetTransfers }] of assetMap) {
+      const events = this.timelineService.buildAssetEvents(assetTrades, assetTransfers);
+      const normalizedSymbol = this.normalizeSymbol(symbol);
+      const currentPrice = currentPrices[normalizedSymbol];
+
+      const state = this.timelineService.processAssetTimeline(events, currentPrice);
+
+      // Only include if position is open (quantity > 0)
+      if (state.totalQuantity > 0.00000001) {
         holdings.set(symbol, {
           symbol,
-          quantity: newQuantity,
-          averagePrice: newAveragePrice,
-          totalInvested: newTotalInvested
+          quantity: state.totalQuantity,
+          averagePrice: state.totalCost / state.totalQuantity,
+          totalInvested: state.totalCost,
+          realizedProfitLoss: state.realizedProfitLoss,
         });
-      } else if (trade.type === 'SELL') {
-        // Reduce position
-        const newQuantity = existing.quantity - trade.quantity;
-        
-        // Consider position closed if quantity is very small (< 0.00000001)
-        if (newQuantity <= 0.00000001) {
-          holdings.delete(symbol);
-        } else {
-          // Reduce proportionally
-          const soldProportion = trade.quantity / existing.quantity;
-          const newTotalInvested = existing.totalInvested * (1 - soldProportion);
-
-          holdings.set(symbol, {
-            symbol,
-            quantity: newQuantity,
-            averagePrice: existing.averagePrice,
-            totalInvested: newTotalInvested
-          });
-        }
       }
     }
 
@@ -112,13 +126,13 @@ export class PortfolioUpdateService {
   }
 
   /**
-   * Update a single portfolio with current prices
+   * Update a single portfolio with current prices and closed positions
    */
   async updatePortfolio(portfolioId: string): Promise<Portfolio> {
     const portfolioRepo = AppDataSource.getRepository(Portfolio);
-    const tradeRepo = AppDataSource.getRepository(Trade);
+    const transferRepo = AppDataSource.getRepository(Transfer);
 
-    // Fetch portfolio with trades
+    // Fetch portfolio with trades and transfers
     const portfolio = await portfolioRepo.findOne({
       where: { id: portfolioId },
       relations: ['trades']
@@ -128,8 +142,30 @@ export class PortfolioUpdateService {
       throw new Error(`Portfolio ${portfolioId} not found`);
     }
 
-    // Calculate holdings
-    const holdings = this.calculateHoldings(portfolio.trades);
+    // Fetch transfers for this portfolio
+    const transfers = await transferRepo.find({
+      where: { portfolioId },
+      order: { executedAt: 'ASC' },
+    });
+
+    // Get unique symbols from trades and transfers
+    const tradeSymbols = [...new Set(portfolio.trades.map(t => t.symbol.toUpperCase()))];
+    const transferAssets = [...new Set(transfers.map(t => t.asset.toUpperCase()))];
+    
+    // Combine and normalize to USDT pairs for price fetching
+    const allSymbols = [...tradeSymbols];
+    for (const asset of transferAssets) {
+      const symbol = `${asset}USDT`;
+      if (!allSymbols.includes(symbol)) {
+        allSymbols.push(symbol);
+      }
+    }
+
+    // Get current prices
+    const prices = await this.priceService.getPrices(allSymbols);
+
+    // Calculate holdings using timeline service
+    const holdings = await this.calculateHoldings(portfolio.trades, transfers, prices);
 
     if (holdings.size === 0) {
       // No active positions
@@ -140,43 +176,82 @@ export class PortfolioUpdateService {
       return portfolio;
     }
 
-    // Get current prices for all symbols
-    const symbols = Array.from(holdings.keys());
-    const prices = await this.priceService.getPrices(symbols);
-
-    console.log('Fetched prices for symbols:', symbols);
-    console.log('Prices received:', prices);
-
-    // Calculate totals
+    // Calculate totals: unrealized P/L + realized P/L
     let totalInvested = 0;
     let currentValue = 0;
+    let totalRealizedPL = 0;
 
     for (const [symbol, holding] of holdings) {
       totalInvested += holding.totalInvested;
+      totalRealizedPL += holding.realizedProfitLoss;
       
       const normalizedSymbol = this.normalizeSymbol(symbol);
       const currentPrice = prices[normalizedSymbol];
       
-      console.log(`${symbol} -> normalized: ${normalizedSymbol}, price: ${currentPrice}`);
-      
       if (currentPrice) {
         currentValue += holding.quantity * currentPrice;
       } else {
-        console.warn(`No price found for ${symbol} (normalized: ${normalizedSymbol}), using average price`);
+        console.warn(`No price found for ${symbol}, using average price`);
         currentValue += holding.quantity * holding.averagePrice;
       }
     }
 
-    const profitLoss = currentValue - totalInvested;
+    const unrealizedPL = currentValue - totalInvested;
+    const profitLoss = unrealizedPL + totalRealizedPL;
 
-    // Update portfolio
+    // Update portfolio with realized + unrealized P/L
     portfolio.totalInvested = totalInvested;
     portfolio.currentValue = currentValue;
     portfolio.profitLoss = profitLoss;
 
     await portfolioRepo.save(portfolio);
 
-    console.log(`Updated portfolio ${portfolio.name}: invested=${totalInvested.toFixed(2)}, current=${currentValue.toFixed(2)}, P/L=${profitLoss.toFixed(2)}`);
+    console.log(`Updated portfolio ${portfolio.name}:`);
+    console.log(`  Invested: ${totalInvested.toFixed(2)}`);
+    console.log(`  Current: ${currentValue.toFixed(2)}`);
+    console.log(`  Unrealized P/L: ${unrealizedPL.toFixed(2)}`);
+    console.log(`  Realized P/L: ${totalRealizedPL.toFixed(2)}`);
+    console.log(`  Total P/L: ${profitLoss.toFixed(2)}`);
+
+    // Detect and save closed positions for each asset
+    const assetMap = new Map<string, { trades: Trade[]; transfers: Transfer[] }>();
+
+    for (const trade of portfolio.trades) {
+      const symbol = trade.symbol.toUpperCase();
+      if (!assetMap.has(symbol)) {
+        assetMap.set(symbol, { trades: [], transfers: [] });
+      }
+      assetMap.get(symbol)!.trades.push(trade);
+    }
+
+    for (const transfer of transfers) {
+      const asset = transfer.asset.toUpperCase();
+      let matchingSymbol: string | null = null;
+      for (const [symbol] of assetMap) {
+        if (symbol.startsWith(asset)) {
+          matchingSymbol = symbol;
+          break;
+        }
+      }
+      if (!matchingSymbol) {
+        matchingSymbol = `${asset}USDT`;
+        assetMap.set(matchingSymbol, { trades: [], transfers: [] });
+      }
+      assetMap.get(matchingSymbol)!.transfers.push(transfer);
+    }
+
+    for (const [symbol, { trades: assetTrades, transfers: assetTransfers }] of assetMap) {
+      const events = this.timelineService.buildAssetEvents(assetTrades, assetTransfers);
+      const closedPositions = await this.timelineService.detectClosedPositions(
+        portfolioId,
+        symbol,
+        events
+      );
+
+      if (closedPositions.length > 0) {
+        await this.timelineService.saveClosedPositions(portfolioId, symbol, closedPositions);
+      }
+    }
 
     return portfolio;
   }
@@ -242,6 +317,7 @@ export class PortfolioUpdateService {
     profitLossPercentage: number;
   }>> {
     const portfolioRepo = AppDataSource.getRepository(Portfolio);
+    const transferRepo = AppDataSource.getRepository(Transfer);
     
     const portfolio = await portfolioRepo.findOne({
       where: { id: portfolioId },
@@ -252,39 +328,46 @@ export class PortfolioUpdateService {
       throw new Error(`Portfolio ${portfolioId} not found`);
     }
 
-    const holdings = this.calculateHoldings(portfolio.trades);
-    const symbols = Array.from(holdings.keys());
+    const transfers = await transferRepo.find({
+      where: { portfolioId },
+      order: { executedAt: 'ASC' },
+    });
+
+    // Get unique symbols
+    const tradeSymbols = [...new Set(portfolio.trades.map(t => t.symbol.toUpperCase()))];
+    const transferAssets = [...new Set(transfers.map(t => t.asset.toUpperCase()))];
+    const allSymbols = [...tradeSymbols];
+    for (const asset of transferAssets) {
+      const symbol = `${asset}USDT`;
+      if (!allSymbols.includes(symbol)) {
+        allSymbols.push(symbol);
+      }
+    }
     
-    if (symbols.length === 0) {
+    if (allSymbols.length === 0) {
       return [];
     }
 
-    const prices = await this.priceService.getPrices(symbols);
-
-    console.log('Holdings - symbols:', symbols);
-    console.log('Holdings - prices:', prices);
+    const prices = await this.priceService.getPrices(allSymbols);
+    const holdings = await this.calculateHoldings(portfolio.trades, transfers, prices);
 
     const result = [];
 
     for (const [symbol, holding] of holdings) {
-      // Skip holdings with very small quantities (dust)
+      // Skip dust holdings
       if (holding.quantity < 0.00000001) {
         continue;
       }
 
       const normalizedSymbol = this.normalizeSymbol(symbol);
       const currentPrice = prices[normalizedSymbol];
-      
-      console.log(`Holdings: ${symbol} -> ${normalizedSymbol}, price: ${currentPrice || 'NOT FOUND'}`);
-      
-      // Use current price from API, fallback to average price only if not found
       const priceToUse = currentPrice || holding.averagePrice;
       const currentValue = holding.quantity * priceToUse;
       const profitLoss = currentValue - holding.totalInvested;
       const profitLossPercentage = (profitLoss / holding.totalInvested) * 100;
 
       result.push({
-        symbol: this.formatSymbolWithSlash(symbol), // Format with slash
+        symbol: this.formatSymbolWithSlash(symbol),
         quantity: holding.quantity,
         averagePrice: holding.averagePrice,
         currentPrice: priceToUse,
@@ -300,15 +383,9 @@ export class PortfolioUpdateService {
 
   /**
    * Normalize symbol to USDT pair (matching priceService logic)
-   * Examples:
-   * - SAGAUSDC -> SAGAUSDT
-   * - BTCBUSD -> BTCUSDT
-   * - BTC -> BTCUSDT
    */
   private normalizeSymbol(symbol: string): string {
     const upper = symbol.toUpperCase();
-    
-    // Extract base asset by removing common quote assets
     const quoteAssets = ['USDT', 'USDC', 'BUSD', 'TUSD', 'FDUSD', 'EUR', 'BTC', 'ETH', 'BNB'];
     
     let baseAsset = upper;
@@ -319,7 +396,6 @@ export class PortfolioUpdateService {
       }
     }
     
-    // Always return USDT pair for consistency
     return `${baseAsset}USDT`;
   }
 }
