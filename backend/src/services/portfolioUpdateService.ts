@@ -207,7 +207,15 @@ export class PortfolioUpdateService {
       where: { portfolioId }
     });
 
-    return closedPositions.reduce((sum, pos) => sum + pos.realizedProfitLoss, 0);
+    const total = closedPositions.reduce((sum, pos) => {
+      // Force conversion to number to prevent string concatenation
+      const plValue = typeof pos.realizedProfitLoss === 'string' 
+        ? parseFloat(pos.realizedProfitLoss) 
+        : pos.realizedProfitLoss;
+      return sum + plValue;
+    }, 0);
+
+    return total;
   }
 
   /**
@@ -248,14 +256,15 @@ export class PortfolioUpdateService {
     // Calculate holdings (this will create closed positions if needed)
     const holdings = await this.calculateHoldings(portfolioId, portfolio.trades);
 
-    // Get realized P/L from closed positions
+    // Get realized P/L from closed positions (FORCE NUMBER CONVERSION)
     const realizedPL = await this.getTotalRealizedPL(portfolioId);
+    const realizedPLNumber = typeof realizedPL === 'string' ? parseFloat(realizedPL) : realizedPL;
 
     if (holdings.size === 0) {
       // No active positions, but may have realized P/L
       portfolio.totalInvested = 0;
       portfolio.currentValue = 0;
-      portfolio.profitLoss = realizedPL; // Only realized P/L
+      portfolio.profitLoss = realizedPLNumber; // Only realized P/L
       await portfolioRepo.save(portfolio);
       return portfolio;
     }
@@ -289,7 +298,7 @@ export class PortfolioUpdateService {
 
     // Unrealized P/L (open positions) + Realized P/L (closed positions)
     const unrealizedPL = currentValue - totalInvested;
-    const totalPL = unrealizedPL + realizedPL;
+    const totalPL = Number(unrealizedPL) + Number(realizedPLNumber); // FORCE NUMBER ADDITION
 
     // Update portfolio
     portfolio.totalInvested = totalInvested;
@@ -302,7 +311,7 @@ export class PortfolioUpdateService {
     console.log(`  - Open invested: $${totalInvested.toFixed(2)}`);
     console.log(`  - Current value: $${currentValue.toFixed(2)}`);
     console.log(`  - Unrealized P/L: $${unrealizedPL.toFixed(2)}`);
-    console.log(`  - Realized P/L: $${realizedPL.toFixed(2)}`);
+    console.log(`  - Realized P/L: $${realizedPLNumber.toFixed(2)}`);
     console.log(`  - Total P/L: $${totalPL.toFixed(2)}`);
 
     return portfolio;
