@@ -191,7 +191,7 @@ const PortfolioDetail: React.FC = () => {
         </div>
         <div className="header-actions">
           <button onClick={() => setShowImportForm(!showImportForm)} className="btn-success">
-            📥 Import from Binance
+            📥 Import Trades
           </button>
           <button onClick={handleRefreshPrices} className="btn-secondary">
             🔄 Refresh Prices
@@ -208,9 +208,9 @@ const PortfolioDetail: React.FC = () => {
 
       {showImportForm && (
         <div className="trade-form-card import-form">
-          <h2>📥 Import Trades from Binance</h2>
+          <h2>📥 Import Trades from Exchange</h2>
           <p className="form-description">
-            Import your trading history from Binance automatically
+            Import your trading history from all connected exchanges (Binance, Revolut X, etc.)
           </p>
 
           <form onSubmit={handleImportTrades}>
@@ -231,10 +231,10 @@ const PortfolioDetail: React.FC = () => {
             <div className="import-info">
               <h3>ℹ️ What will be imported:</h3>
               <ul>
-                <li>✅ Spot trades (BUY/SELL) - Used for P/L calculation</li>
-                <li>📊 Deposits detected (informational only)</li>
-                <li>📊 Withdrawals detected (informational only)</li>
-                <li>⚠️ Rate limit: ~1200 requests/minute</li>
+                <li>✅ Spot trades (BUY/SELL) from all active API keys</li>
+                <li>📊 Deposits detected (Binance only, informational)</li>
+                <li>📊 Withdrawals detected (Binance only, informational)</li>
+                <li>⚠️ Rate limit: ~1200 requests/minute (Binance)</li>
               </ul>
             </div>
 
