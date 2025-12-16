@@ -11,12 +11,22 @@ import { ExchangeApiKey } from '../entities/ExchangeApiKey';
  * - Signature format: timestamp + METHOD + path + queryString + body
  * - Ed25519 signature, base64 encoded
  * 
+ * Fee Model:
+ * - Revolut X charges 0% maker fees and 0.09% taker fees
+ * - The historical orders API does not expose per-trade fee information
+ * - We calculate an estimated fee of 0.09% (taker) for all trades
+ * - Fee is always in the quote currency (EUR for XXX/EUR pairs)
+ * 
  * Documentation: https://developer.revolut.com/docs/x-api/revolut-x-crypto-exchange-rest-api
  */
 export class RevolutXService {
   private client: AxiosInstance;
   private apiKey: string;
   private privateKey: Uint8Array;
+
+  // Revolut X fee schedule (as of 2024)
+  private static readonly MAKER_FEE_RATE = 0.0000; // 0%
+  private static readonly TAKER_FEE_RATE = 0.0009; // 0.09%
 
   constructor(apiKey: string, privateKeyInput: string) {
     this.apiKey = apiKey;
@@ -145,6 +155,49 @@ export class RevolutXService {
     // Fallback to current time
     console.warn(`[Revolut X] Could not parse timestamp: ${value}, using current time`);
     return new Date();
+  }
+
+  /**
+   * Calculate estimated fee for a trade
+   * Since the API doesn't provide per-trade fees, we estimate using the taker fee rate
+   * 
+   * @param quantity - Trade quantity in base currency
+   * @param price - Trade price in quote currency
+   * @returns Estimated fee in quote currency (EUR for XXX/EUR pairs)
+   */
+  private calculateEstimatedFee(quantity: number, price: number): number {
+    const tradeValue = quantity * price;
+    const estimatedFee = tradeValue * RevolutXService.TAKER_FEE_RATE;
+    return estimatedFee;
+  }
+
+  /**
+   * Extract quote currency from symbol (e.g., "BTC-EUR" -> "EUR")
+   */
+  private getQuoteCurrency(symbol: string): string {
+    if (!symbol) return 'EUR';
+    
+    // Handle formats: BTC-EUR, BTC/EUR, BTCEUR
+    const normalized = symbol.toUpperCase();
+    
+    if (normalized.includes('-')) {
+      return normalized.split('-')[1] || 'EUR';
+    }
+    
+    if (normalized.includes('/')) {
+      return normalized.split('/')[1] || 'EUR';
+    }
+    
+    // Common quote currencies for Revolut X
+    const quotes = ['EUR', 'USD', 'GBP', 'BTC', 'ETH'];
+    for (const quote of quotes) {
+      if (normalized.endsWith(quote)) {
+        return quote;
+      }
+    }
+    
+    // Default to EUR (primary quote currency on Revolut X)
+    return 'EUR';
   }
 
   /**
@@ -390,16 +443,28 @@ export class RevolutXService {
     }
   }
 
+  /**
+   * Convert Revolut X trade to internal format
+   * Calculates estimated fee based on trade value (0.09% taker fee)
+   */
   convertToInternalFormat(trade: any): any {
+    const quantity = parseFloat(trade.quantity || 0);
+    const price = parseFloat(trade.price || 0);
+    const quoteCurrency = this.getQuoteCurrency(trade.symbol);
+    
+    // Calculate estimated fee (0.09% of trade value)
+    // Note: Revolut X API doesn't expose per-trade fees in historical orders
+    const estimatedFee = this.calculateEstimatedFee(quantity, price);
+    
     return {
       externalId: trade.id?.toString() || '',
       timestamp: this.parseTimestamp(trade.timestamp),
       symbol: this.normalizeSymbol(trade.symbol || ''),
       side: (trade.side || 'buy').toLowerCase(),
-      quantity: parseFloat(trade.quantity || 0),
-      price: parseFloat(trade.price || 0),
-      fee: parseFloat(trade.fee || 0),
-      feeCurrency: trade.fee_currency || trade.feeCurrency || 'EUR',
+      quantity,
+      price,
+      fee: estimatedFee,
+      feeCurrency: quoteCurrency,
       type: 'trade',
     };
   }
