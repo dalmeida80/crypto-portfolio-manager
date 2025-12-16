@@ -40,10 +40,38 @@ interface ClosedPositionData {
   numberOfTrades: number;
 }
 
+/**
+ * TradeTimelineService - Calculates position state and P&L using timeline-based approach
+ * 
+ * Key Features:
+ * - Processes trades and transfers chronologically
+ * - Calculates weighted average cost basis
+ * - Tracks realized and unrealized P&L separately
+ * - Handles fees correctly (added to buy cost, subtracted from sell proceeds)
+ * 
+ * Edge Cases Handled:
+ * 1. SELL without prior BUY (deposited assets):
+ *    - No P&L calculated since cost basis is unknown
+ *    - Creates negative position temporarily
+ *    - Corrects when subsequent BUY/DEPOSIT occurs
+ * 
+ * 2. DEPOSIT without cost basis:
+ *    - Increases quantity only
+ *    - Lowers average cost (assumes cost = 0)
+ *    - Use Transfer.knownCostUsd if available for accurate P&L
+ * 
+ * 3. WITHDRAWAL:
+ *    - Reduces quantity and cost proportionally
+ *    - Does NOT generate realized P&L (just moving funds)
+ * 
+ * 4. Dust amounts (< 0.00000001):
+ *    - Treated as zero to avoid rounding errors
+ *    - Position considered closed when quantity reaches dust level
+ */
 export class TradeTimelineService {
   /**
    * Process all events (trades + transfers) for a single asset
-   * Returns final position state with realized and unrealized P/L
+   * Returns final position state with realized and unrealized P&L
    */
   processAssetTimeline(
     events: AssetEvent[],
@@ -98,6 +126,7 @@ export class TradeTimelineService {
 
   /**
    * Process BUY trade: increase position and cost
+   * Fee is added to total cost (increases cost basis)
    */
   private processBuy(state: PositionState, event: AssetEvent): void {
     const tradeCost = (event.price ?? 0) * event.quantity + (event.fee ?? 0);
@@ -106,15 +135,19 @@ export class TradeTimelineService {
   }
 
   /**
-   * Process SELL trade: reduce position, calculate realized P/L
-   * If selling without an open position, treat as selling deposited assets (no P/L)
+   * Process SELL trade: reduce position, calculate realized P&L
+   * 
+   * Edge Case: Selling without open position (deposited assets)
+   * - This happens when assets were deposited/transferred in from external wallet
+   * - No cost basis available, so we cannot calculate accurate P&L
+   * - Creates temporary negative position that gets corrected by future deposits
+   * - Warning is logged for tracking
    */
   private processSell(state: PositionState, event: AssetEvent): void {
-    // If no open position, this is selling deposited/transferred assets
-    // Don't calculate P/L since we don't know the cost basis
+    // Edge Case: SELL without open position (deposited assets sold)
     if (state.totalQuantity <= 0 || state.totalCost <= 0) {
       console.warn(
-        `SELL without open position - treating as selling deposited assets (no P/L calculated)`
+        `[Timeline] SELL without open position - treating as selling deposited assets (no P/L calculated)`
       );
       // Still update quantity to reflect negative position
       // This will be corrected when deposits/buys happen later
@@ -139,7 +172,7 @@ export class TradeTimelineService {
       const remainingQuantity = event.quantity - quantityToSell;
       state.totalQuantity -= remainingQuantity;
       console.warn(
-        `Sold ${remainingQuantity} more than available - negative position created`
+        `[Timeline] Sold ${remainingQuantity} more than available - negative position created`
       );
     }
 
@@ -152,6 +185,11 @@ export class TradeTimelineService {
 
   /**
    * Process DEPOSIT: increase quantity, optionally add cost
+   * 
+   * Edge Case: Deposits without cost basis
+   * - If knownCostUsd is not provided, deposit is treated as cost = 0
+   * - This lowers the average cost per unit
+   * - For accurate P&L, always provide knownCostUsd when available
    */
   private processDeposit(state: PositionState, event: AssetEvent): void {
     state.totalQuantity += event.quantity;
@@ -161,6 +199,7 @@ export class TradeTimelineService {
       state.totalCost += event.knownCostUsd;
     }
     // Otherwise, treat as cost 0 (lowers average cost)
+    // This is an edge case where we don't know the original purchase price
   }
 
   /**
@@ -169,7 +208,7 @@ export class TradeTimelineService {
    */
   private processWithdrawal(state: PositionState, event: AssetEvent): void {
     if (state.totalQuantity <= 0) {
-      console.warn('Withdrawal with no position available');
+      console.warn('[Timeline] Withdrawal with no position available');
       return;
     }
 
@@ -257,7 +296,7 @@ export class TradeTimelineService {
       } else if (event.type === 'SELL') {
         // Skip sells without position (deposited assets sold)
         if (lotQuantity <= 0 || lotCost <= 0) {
-          console.warn(`Skipping closed position detection for SELL without position`);
+          console.warn(`[Timeline] Skipping closed position detection for SELL without position`);
           continue;
         }
 
@@ -358,7 +397,7 @@ export class TradeTimelineService {
     }
 
     console.log(
-      `Saved ${closedPositions.length} closed position(s) for ${symbol} in portfolio ${portfolioId}`
+      `[Timeline] Saved ${closedPositions.length} closed position(s) for ${symbol} in portfolio ${portfolioId}`
     );
   }
 }
