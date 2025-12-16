@@ -121,8 +121,8 @@ export class RevolutXService {
    * Format: timestamp + METHOD + path + queryString + body
    * @param timestamp Unix timestamp in milliseconds
    * @param method HTTP method (GET, POST)
-   * @param path Request path (e.g., /api/1.0/fills)
-   * @param queryString URL query string without '?' (e.g., limit=10&from=123)
+   * @param path Request path (e.g., /api/1.0/orders/historical)
+   * @param queryString URL query string without '?' (e.g., limit=10&start_date=123)
    * @param body Request body as JSON string
    */
   private generateSignature(
@@ -141,7 +141,7 @@ export class RevolutXService {
   /**
    * Build query string from params object
    * @param params Query parameters object
-   * @returns Query string without '?' prefix (e.g., "limit=10&from=123")
+   * @returns Query string without '?' prefix (e.g., "limit=10&start_date=123")
    */
   private buildQueryString(params?: Record<string, any>): string {
     if (!params || Object.keys(params).length === 0) {
@@ -211,21 +211,55 @@ export class RevolutXService {
     }
   }
 
+  /**
+   * Get trade history (fills) from historical orders
+   * Revolut X API returns orders, and we extract fills from them
+   * 
+   * @param limit Maximum number of orders to fetch
+   * @param fromTimestamp Start timestamp in Unix epoch milliseconds
+   * @returns Array of trades (fills)
+   */
   async getTradeHistory(limit: number = 100, fromTimestamp?: number): Promise<any[]> {
     try {
       const queryParams: Record<string, any> = { limit };
       
+      // Revolut X uses start_date and end_date (max 1 week difference)
       if (fromTimestamp) {
-        queryParams.from = fromTimestamp;
+        queryParams.start_date = fromTimestamp;
+        // Set end_date to current time
+        queryParams.end_date = Date.now();
       }
+      
+      // Filter only filled orders (states: filled, partially_filled)
+      queryParams.states = 'filled,partially_filled';
 
-      const data = await this.makeAuthenticatedRequest(
+      const response = await this.makeAuthenticatedRequest(
         'GET',
-        '/api/1.0/fills',
+        '/api/1.0/orders/historical',
         queryParams
       );
       
-      return data;
+      // Extract orders from response
+      const orders = response.data || response || [];
+      
+      // Convert orders to trade format
+      const trades: any[] = [];
+      for (const order of orders) {
+        // Each filled order represents a trade
+        if (order.filled_quantity && parseFloat(order.filled_quantity) > 0) {
+          trades.push({
+            id: order.id,
+            symbol: order.symbol,
+            side: order.side,
+            quantity: order.filled_quantity,
+            price: order.average_price || order.limit_price || 0,
+            timestamp: order.updated_at || order.created_at,
+            status: order.status,
+          });
+        }
+      }
+      
+      return trades;
     } catch (error) {
       console.error('Failed to fetch Revolut X trade history:', error);
       return [];
@@ -234,12 +268,12 @@ export class RevolutXService {
 
   convertToInternalFormat(trade: any): any {
     return {
-      externalId: trade.id?.toString() || trade.fill_id?.toString() || '',
-      timestamp: new Date(trade.timestamp || trade.created_at || trade.time),
-      symbol: this.normalizeSymbol(trade.symbol || trade.pair || trade.instrument),
+      externalId: trade.id?.toString() || '',
+      timestamp: new Date(trade.timestamp || trade.updated_at || trade.created_at),
+      symbol: this.normalizeSymbol(trade.symbol),
       side: (trade.side || '').toLowerCase(),
-      quantity: parseFloat(trade.quantity || trade.amount || trade.size || 0),
-      price: parseFloat(trade.price || 0),
+      quantity: parseFloat(trade.quantity || trade.filled_quantity || 0),
+      price: parseFloat(trade.price || trade.average_price || 0),
       fee: parseFloat(trade.fee || 0),
       feeCurrency: trade.fee_currency || trade.feeCurrency || 'USD',
       type: 'trade',
