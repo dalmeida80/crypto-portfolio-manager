@@ -229,9 +229,9 @@ export class TradeImportService {
       console.log(`Import start date: ${startDate.toISOString()}`);
     }
 
-    // Fetch trades from Revolut X
+    // Fetch trades from Revolut X (max limit is 100)
     console.log('Fetching trades from Revolut X...');
-    const revolutXTrades = await revolutX.getTradeHistory(1000, fromTimestamp);
+    const revolutXTrades = await revolutX.getTradeHistory(100, fromTimestamp);
     console.log(`Total trades fetched from Revolut X: ${revolutXTrades.length}`);
 
     // Get existing external IDs
