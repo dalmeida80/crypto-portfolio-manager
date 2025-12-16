@@ -23,6 +23,25 @@ export interface Holding {
   profitLossPercentage: number;
 }
 
+export interface SimpleHolding {
+  asset: string;
+  symbol: string;
+  quantity: number;
+  currentPrice: number;
+  currentValue: number;
+}
+
+export interface BalanceResponse {
+  portfolio: {
+    id: string;
+    name: string;
+    exchange: string;
+  };
+  totalValue: number;
+  holdings: SimpleHolding[];
+  updatedAt: string;
+}
+
 export interface PriceResponse {
   symbol: string;
   price: number;
@@ -202,6 +221,12 @@ class ApiService {
 
   async getPortfolioStats(id: string): Promise<PortfolioStats> {
     const { data } = await this.api.get<PortfolioStats>(`/portfolios/${id}/stats`);
+    return data;
+  }
+
+  // Simple balance view (no P/L tracking)
+  async getPortfolioBalances(id: string): Promise<BalanceResponse> {
+    const { data } = await this.api.get<BalanceResponse>(`/portfolios/${id}/balances`);
     return data;
   }
 
