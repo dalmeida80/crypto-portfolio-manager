@@ -35,6 +35,7 @@ export class RevolutXService {
   private parsePrivateKey(input: string): Uint8Array {
     input = input.trim();
 
+    // PEM format (-----BEGIN PRIVATE KEY-----)
     if (input.includes('BEGIN PRIVATE KEY')) {
       const base64 = input
         .replace(/-----BEGIN PRIVATE KEY-----/, '')
@@ -47,21 +48,49 @@ export class RevolutXService {
       return keypair.secretKey;
     }
     
+    // Hex format (64 or 128 chars)
     if (/^[0-9a-fA-F]+$/.test(input.replace(/\s/g, ''))) {
       const hex = input.replace(/\s/g, '');
       
+      // 32-byte seed (64 hex chars)
       if (hex.length === 64) {
         const seed = this.hexToUint8Array(hex);
         const keypair = nacl.sign.keyPair.fromSeed(seed);
         return keypair.secretKey;
       }
       
+      // 64-byte secret key (128 hex chars)
       if (hex.length === 128) {
         return this.hexToUint8Array(hex);
       }
     }
 
-    throw new Error('Invalid private key format.');
+    // Try Base64 format (most common for Revolut X)
+    try {
+      const decoded = this.base64ToUint8Array(input);
+      
+      // If 32 bytes, it's a seed
+      if (decoded.length === 32) {
+        const keypair = nacl.sign.keyPair.fromSeed(decoded);
+        return keypair.secretKey;
+      }
+      
+      // If 64 bytes, it's the full secret key
+      if (decoded.length === 64) {
+        return decoded;
+      }
+
+      // If it's a DER-encoded key, extract the last 32 bytes as seed
+      if (decoded.length > 32) {
+        const seed = decoded.slice(-32);
+        const keypair = nacl.sign.keyPair.fromSeed(seed);
+        return keypair.secretKey;
+      }
+    } catch (e) {
+      // Not valid base64, continue to error
+    }
+
+    throw new Error('Invalid private key format. Expected PEM, hex (64/128 chars), or base64.');
   }
 
   private base64ToUint8Array(base64: string): Uint8Array {
