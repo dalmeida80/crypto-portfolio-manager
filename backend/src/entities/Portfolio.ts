@@ -22,6 +22,9 @@ export class Portfolio {
   @Column({ type: 'text', nullable: true })
   description?: string;
 
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  exchange?: string; // 'binance', 'revolut-x', or null for manual portfolios
+
   @Column({ 
     type: 'decimal', 
     precision: 20, 
