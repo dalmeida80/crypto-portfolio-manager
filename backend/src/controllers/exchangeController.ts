@@ -1,11 +1,13 @@
 import { Response } from 'express';
 import { AppDataSource } from '../index';
 import { ExchangeApiKey } from '../entities/ExchangeApiKey';
+import { Transfer } from '../entities/Transfer';
 import { AuthRequest } from '../middleware/auth';
 import { encrypt } from '../utils/encryption';
 import { BinanceService } from '../services/binanceService';
 import { RevolutXService } from '../services/revolutXService';
 import { TradeImportService } from '../services/tradeImportService';
+import { RevolutXCsvParser } from '../services/revolutXCsvParser';
 
 const tradeImportService = new TradeImportService();
 
@@ -179,6 +181,78 @@ export const importAllTrades = async (req: AuthRequest, res: Response): Promise<
     console.error('Import all trades error:', error);
     res.status(500).json({ 
       error: 'Failed to import trades',
+      message: error.message 
+    });
+  }
+};
+
+/**
+ * Import deposits from Revolut X CSV file
+ * Expects CSV content in request body
+ */
+export const importRevolutXCsv = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const { portfolioId } = req.params;
+    const { csvContent } = req.body;
+
+    if (!csvContent) {
+      res.status(400).json({ error: 'CSV content is required' });
+      return;
+    }
+
+    // Parse CSV
+    const { deposits, trades } = RevolutXCsvParser.parseCSV(csvContent);
+
+    // Import deposits as transfers
+    const transferRepo = AppDataSource.getRepository(Transfer);
+    
+    let depositsImported = 0;
+    let depositsSkipped = 0;
+
+    for (const deposit of deposits) {
+      // Create unique external ID based on timestamp and amount
+      const externalId = `revolutx-csv-${deposit.timestamp.getTime()}-${deposit.amount}`;
+
+      // Check if already exists
+      const existing = await transferRepo.findOne({
+        where: { portfolioId, externalId }
+      });
+
+      if (existing) {
+        depositsSkipped++;
+        continue;
+      }
+
+      const transfer = new Transfer();
+      transfer.portfolioId = portfolioId;
+      transfer.type = deposit.type;
+      transfer.asset = deposit.currency;
+      transfer.amount = deposit.amount;
+      transfer.fee = 0;
+      transfer.executedAt = deposit.timestamp;
+      transfer.source = 'revolutx-csv';
+      transfer.externalId = externalId;
+      transfer.notes = `${deposit.type} from CSV import`;
+
+      await transferRepo.save(transfer);
+      depositsImported++;
+    }
+
+    console.log(`[RevolutX CSV] Imported ${depositsImported} deposits (${depositsSkipped} skipped)`);
+    console.log(`[RevolutX CSV] Found ${trades.length} trades (use API import for trades)`);
+
+    res.json({
+      success: true,
+      depositsImported,
+      depositsSkipped,
+      tradesFound: trades.length,
+      message: `Imported ${depositsImported} deposits from CSV. Use regular API import for trades.`
+    });
+  } catch (error: any) {
+    console.error('Import Revolut X CSV error:', error);
+    res.status(500).json({ 
+      error: 'Failed to import CSV',
       message: error.message 
     });
   }
