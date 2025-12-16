@@ -119,11 +119,7 @@ export class RevolutXService {
   /**
    * Generate Ed25519 signature according to Revolut X spec
    * Format: timestamp + METHOD + path + queryString + body
-   * @param timestamp Unix timestamp in milliseconds
-   * @param method HTTP method (GET, POST)
-   * @param path Request path (e.g., /api/1.0/orders/historical)
-   * @param queryString URL query string without '?' (e.g., limit=10&start_date=123)
-   * @param body Request body as JSON string
+   * Note: queryString must NOT include URL encoding in signature (e.g., use ',' not '%2C')
    */
   private generateSignature(
     timestamp: string,
@@ -141,11 +137,10 @@ export class RevolutXService {
 
   /**
    * Build query string from params object
-   * Query params are sorted alphabetically by key for consistent signature
-   * @param params Query parameters object
-   * @returns Query string without '?' prefix (e.g., "end_date=123&limit=10&start_date=100")
+   * For signature: NO URL encoding (raw values)
+   * For actual HTTP request: axios handles encoding
    */
-  private buildQueryString(params?: Record<string, any>): string {
+  private buildQueryStringForSignature(params?: Record<string, any>): string {
     if (!params || Object.keys(params).length === 0) {
       return '';
     }
@@ -153,8 +148,9 @@ export class RevolutXService {
     // Sort keys alphabetically for consistent signature
     const sortedKeys = Object.keys(params).sort();
     
+    // NO URL encoding for signature - use raw values
     return sortedKeys
-      .map((key) => `${key}=${encodeURIComponent(params[key])}`)
+      .map((key) => `${key}=${params[key]}`)
       .join('&');
   }
 
@@ -165,14 +161,14 @@ export class RevolutXService {
     data?: any
   ): Promise<any> {
     const timestamp = Date.now().toString();
-    const queryString = this.buildQueryString(queryParams);
+    const queryStringForSignature = this.buildQueryStringForSignature(queryParams);
     const body = data ? JSON.stringify(data) : '';
-    const signature = this.generateSignature(timestamp, method, path, queryString, body);
+    const signature = this.generateSignature(timestamp, method, path, queryStringForSignature, body);
 
     console.log('[Revolut X Debug] Request:', {
       method,
       path,
-      queryString,
+      queryParams,
       timestamp,
       hasBody: !!body,
     });
@@ -225,26 +221,17 @@ export class RevolutXService {
   }
 
   /**
-   * Get trade history (fills) from historical orders
-   * Revolut X API returns orders, and we extract fills from them
-   * 
-   * @param limit Maximum number of orders to fetch
-   * @param fromTimestamp Start timestamp in Unix epoch milliseconds
-   * @returns Array of trades (fills)
+   * Get trade history from historical orders
+   * Note: Revolut X API has a max 1 week difference between start_date and end_date
    */
   async getTradeHistory(limit: number = 100, fromTimestamp?: number): Promise<any[]> {
     try {
       const queryParams: Record<string, any> = { limit };
       
-      // Revolut X uses start_date and end_date (max 1 week difference)
       if (fromTimestamp) {
         queryParams.start_date = fromTimestamp;
-        // Set end_date to current time
         queryParams.end_date = Date.now();
       }
-      
-      // Filter only filled orders (states: filled, partially_filled)
-      queryParams.states = 'filled,partially_filled';
 
       const response = await this.makeAuthenticatedRequest(
         'GET',
@@ -252,15 +239,12 @@ export class RevolutXService {
         queryParams
       );
       
-      // Extract orders from response
       const orders = response.data || response || [];
-      
       console.log(`[Revolut X] Fetched ${orders.length} historical orders`);
       
-      // Convert orders to trade format
+      // Convert filled orders to trade format
       const trades: any[] = [];
       for (const order of orders) {
-        // Each filled order represents a trade
         if (order.filled_quantity && parseFloat(order.filled_quantity) > 0) {
           trades.push({
             id: order.id,
