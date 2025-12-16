@@ -6,41 +6,32 @@ import { ExchangeApiKey } from '../entities/ExchangeApiKey';
 /**
  * RevolutXService - Handles Revolut X API authentication and data fetching
  * 
- * Authentication uses Ed25519 signatures:
- * - Headers: X-Revx-API-Key, X-Revx-Timestamp, X-Revx-Signature
- * - Signature is created from: timestamp + method + path + queryString + body
- * - Path must start with /api
- * - Signature must be base64 encoded
+ * Correct configuration:
+ * - Base URL: https://revx.revolut.com
+ * - Signature format: timestamp + METHOD + path
+ * - Headers: X-Revx-API-Key, X-Revx-Timestamp, X-Revx-Signature (base64)
  */
 export class RevolutXService {
   private client: AxiosInstance;
   private apiKey: string;
   private privateKey: Uint8Array;
 
-  constructor(apiKey: string, privateKeyInput: string, baseURL: string = 'https://api.revolut.com') {
+  constructor(apiKey: string, privateKeyInput: string) {
     this.apiKey = apiKey;
     this.privateKey = this.parsePrivateKey(privateKeyInput);
     
     this.client = axios.create({
-      baseURL,
+      baseURL: 'https://revx.revolut.com',
       timeout: 30000,
     });
-    
-    console.log(`RevolutXService initialized with baseURL: ${baseURL}`);
   }
 
-  /**
-   * Create service instance from encrypted ExchangeApiKey entity
-   */
   static async createFromApiKey(exchangeApiKey: ExchangeApiKey): Promise<RevolutXService> {
     const apiKey = decrypt(exchangeApiKey.apiKey);
     const privateKeyInput = decrypt(exchangeApiKey.apiSecret);
     return new RevolutXService(apiKey, privateKeyInput);
   }
 
-  /**
-   * Parse private key from PEM or hex format
-   */
   private parsePrivateKey(input: string): Uint8Array {
     input = input.trim();
 
@@ -95,29 +86,20 @@ export class RevolutXService {
   }
 
   /**
-   * Generate Ed25519 signature for API request
+   * Generate Ed25519 signature
+   * Format: timestamp + METHOD + path
    */
   private generateSignature(
     timestamp: string,
     method: string,
-    path: string,
-    queryString: string = '',
-    body: string = ''
+    path: string
   ): string {
-    const message = timestamp + method.toUpperCase() + path + queryString + body;
-    console.log(`[RevolutX] Signature message: ${message.substring(0, 100)}...`);
-    
+    const message = timestamp + method.toUpperCase() + path;
     const messageBytes = new TextEncoder().encode(message);
     const signature = nacl.sign.detached(messageBytes, this.privateKey);
-    const signatureBase64 = this.uint8ArrayToBase64(signature);
-    
-    console.log(`[RevolutX] Signature (first 20 chars): ${signatureBase64.substring(0, 20)}...`);
-    return signatureBase64;
+    return this.uint8ArrayToBase64(signature);
   }
 
-  /**
-   * Make authenticated request to Revolut X API
-   */
   private async makeAuthenticatedRequest(
     method: 'GET' | 'POST',
     path: string,
@@ -125,26 +107,15 @@ export class RevolutXService {
     data?: any
   ): Promise<any> {
     const timestamp = Date.now().toString();
-    
-    const queryString = queryParams
-      ? Object.entries(queryParams)
-          .map(([key, value]) => `${key}=${value}`)
-          .join('&')
-      : '';
-    
-    const body = data ? JSON.stringify(data) : '';
-    const signature = this.generateSignature(timestamp, method, path, queryString, body);
+    const signature = this.generateSignature(timestamp, method, path);
 
     const headers = {
       'X-Revx-API-Key': this.apiKey,
       'X-Revx-Timestamp': timestamp,
       'X-Revx-Signature': signature,
+      'Accept': 'application/json',
       'Content-Type': 'application/json',
     };
-
-    const fullUrl = queryString ? `${path}?${queryString}` : path;
-    console.log(`[RevolutX] ${method} ${fullUrl}`);
-    console.log(`[RevolutX] API Key: ${this.apiKey.substring(0, 10)}...`);
 
     try {
       const response = await this.client.request({
@@ -154,10 +125,8 @@ export class RevolutXService {
         headers,
         data,
       });
-      console.log(`[RevolutX] Response status: ${response.status}`);
       return response.data;
     } catch (error: any) {
-      console.error(`[RevolutX] Error response:`, error.response?.status, error.response?.data);
       if (error.response) {
         throw new Error(
           `Revolut X API error: ${error.response.status} - ${JSON.stringify(error.response.data)}`
@@ -167,35 +136,20 @@ export class RevolutXService {
     }
   }
 
-  /**
-   * Test API connection by trying multiple possible endpoints
-   */
   async testConnection(): Promise<boolean> {
-    const endpoints = [
-      '/api/1.0/crypto-exchange/balances',
-      '/api/1.0/balances',
-      '/crypto-exchange/balances',
-      '/1.0/crypto-exchange/balances',
-    ];
-
-    for (const endpoint of endpoints) {
-      try {
-        console.log(`[RevolutX] Testing endpoint: ${endpoint}`);
-        await this.makeAuthenticatedRequest('GET', endpoint);
-        console.log(`[RevolutX] Success with endpoint: ${endpoint}`);
-        return true;
-      } catch (error: any) {
-        console.log(`[RevolutX] Failed with endpoint ${endpoint}: ${error.message}`);
-      }
+    try {
+      await this.makeAuthenticatedRequest('GET', '/api/1.0/balances');
+      return true;
+    } catch (error) {
+      console.error('Revolut X connection test failed:', error);
+      return false;
     }
-
-    console.error('[RevolutX] All endpoints failed');
-    return false;
   }
 
   async getAccountBalances(): Promise<any[]> {
     try {
-      const data = await this.makeAuthenticatedRequest('GET', '/api/1.0/crypto-exchange/balances');
+      const data = await this.makeAuthenticatedRequest('GET', '/api/1.0/balances');
+      // Filter balances with total > 0
       return data.filter((balance: any) => parseFloat(balance.total || 0) > 0);
     } catch (error) {
       throw new Error(`Failed to fetch Revolut X balances: ${error}`);
@@ -212,7 +166,7 @@ export class RevolutXService {
 
       const data = await this.makeAuthenticatedRequest(
         'GET',
-        '/api/1.0/crypto-exchange/trades',
+        '/api/1.0/fills',
         queryParams
       );
       
@@ -225,11 +179,11 @@ export class RevolutXService {
 
   convertToInternalFormat(trade: any): any {
     return {
-      externalId: trade.id?.toString() || '',
-      timestamp: new Date(trade.timestamp || trade.created_at),
-      symbol: this.normalizeSymbol(trade.symbol || trade.pair),
+      externalId: trade.id?.toString() || trade.fill_id?.toString() || '',
+      timestamp: new Date(trade.timestamp || trade.created_at || trade.time),
+      symbol: this.normalizeSymbol(trade.symbol || trade.pair || trade.instrument),
       side: (trade.side || '').toLowerCase(),
-      quantity: parseFloat(trade.quantity || trade.amount || 0),
+      quantity: parseFloat(trade.quantity || trade.amount || trade.size || 0),
       price: parseFloat(trade.price || 0),
       fee: parseFloat(trade.fee || 0),
       feeCurrency: trade.fee_currency || trade.feeCurrency || 'USD',
