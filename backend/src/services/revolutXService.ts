@@ -317,6 +317,7 @@ export class RevolutXService {
       
       let emptyChunksInARow = 0;
       const MAX_EMPTY_CHUNKS = 10; // Stop after 60 days of no data
+      let isFirstBatch = true;
       
       // Fetch each chunk (starting from most recent)
       for (let i = 0; i < chunks.length; i++) {
@@ -330,9 +331,10 @@ export class RevolutXService {
           const orders = await this.fetchHistoricalOrdersChunk(chunk.start, chunk.end, limit);
           console.log(`[Revolut X] Chunk ${i + 1}: fetched ${orders.length} orders`);
           
-          // Log first order structure for debugging
-          if (i === 0 && orders.length > 0) {
+          // Log first order structure ONCE for debugging
+          if (isFirstBatch && orders.length > 0) {
             console.log('[Revolut X] Sample order structure:', JSON.stringify(orders[0], null, 2));
+            isFirstBatch = false;
           }
           
           // Track empty chunks
@@ -345,14 +347,20 @@ export class RevolutXService {
           // Convert filled orders to trades
           for (const order of orders) {
             if (order.filled_quantity && parseFloat(order.filled_quantity) > 0) {
+              // Calculate price: quote_quantity / filled_quantity
+              const filledQty = parseFloat(order.filled_quantity);
+              const quoteQty = parseFloat(order.quote_quantity || 0);
+              const price = filledQty > 0 && quoteQty > 0 ? quoteQty / filledQty : 0;
+              
               allTrades.push({
                 id: order.id,
                 symbol: order.symbol,
                 side: order.side,
                 quantity: order.filled_quantity,
-                price: order.average_price || order.limit_price || 0,
+                price: price,
                 timestamp: order.updated_at || order.created_at,
                 status: order.status,
+                quote_quantity: order.quote_quantity,
               });
             }
           }
@@ -373,7 +381,7 @@ export class RevolutXService {
         }
       }
       
-      console.log(`[Revolut X] Total fetched: ${allTrades.length} trades from ${chunks.length} chunk(s)`);
+      console.log(`[Revolut X] Total fetched: ${allTrades.length} trades`);
       return allTrades;
       
     } catch (error) {
@@ -383,23 +391,17 @@ export class RevolutXService {
   }
 
   convertToInternalFormat(trade: any): any {
-    // Log the trade structure to diagnose data issues
-    console.log('[Revolut X] Converting trade:', JSON.stringify(trade, null, 2));
-    
-    const converted = {
+    return {
       externalId: trade.id?.toString() || '',
       timestamp: this.parseTimestamp(trade.timestamp || trade.updated_at || trade.created_at),
       symbol: this.normalizeSymbol(trade.symbol || ''),
       side: (trade.side || 'buy').toLowerCase(),
       quantity: parseFloat(trade.quantity || trade.filled_quantity || 0),
-      price: parseFloat(trade.price || trade.average_price || 0),
+      price: parseFloat(trade.price || 0),
       fee: parseFloat(trade.fee || 0),
-      feeCurrency: trade.fee_currency || trade.feeCurrency || 'USD',
+      feeCurrency: trade.fee_currency || trade.feeCurrency || 'EUR',
       type: 'trade',
     };
-    
-    console.log('[Revolut X] Converted to:', converted);
-    return converted;
   }
 
   private normalizeSymbol(symbol: string): string {
