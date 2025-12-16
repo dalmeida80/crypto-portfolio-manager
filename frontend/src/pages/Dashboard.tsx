@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Portfolio } from '../types';
-import apiService, { PortfolioStats } from '../services/api';
+import apiService, { PortfolioStats, BalanceResponse } from '../services/api';
 
 
 interface AggregatedStats {
@@ -14,8 +14,12 @@ interface AggregatedStats {
   sellTrades: number;
 }
 
+interface PortfolioWithBalance extends Portfolio {
+  balanceData?: BalanceResponse;
+}
+
 const Dashboard: React.FC = () => {
-  const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
+  const [portfolios, setPortfolios] = useState<PortfolioWithBalance[]>([]);
   const [stats, setStats] = useState<AggregatedStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -30,11 +34,35 @@ const Dashboard: React.FC = () => {
       setLoading(true);
       setError('');
       const data = await apiService.getPortfolios();
-      setPortfolios(data || []);
+      
+      // For each portfolio, load balance data if it's Revolut X
+      const portfoliosWithBalances = await Promise.all(
+        (data || []).map(async (portfolio) => {
+          if (portfolio.exchange === 'revolutx') {
+            try {
+              const balanceData = await apiService.getPortfolioBalances(portfolio.id);
+              return {
+                ...portfolio,
+                balanceData,
+                currentValue: balanceData.totalValue,
+                totalInvested: 0, // No tracking for simple view
+                profitLoss: 0 // No P/L tracking
+              };
+            } catch (err) {
+              console.error(`Failed to load balance for ${portfolio.name}:`, err);
+              return portfolio;
+            }
+          }
+          return portfolio;
+        })
+      );
+      
+      setPortfolios(portfoliosWithBalances);
 
-      // Load stats for each portfolio and aggregate
-      if (data && data.length > 0) {
-        const statsPromises = data.map(p => apiService.getPortfolioStats(p.id));
+      // Load stats for portfolios with P/L tracking (exclude Revolut X)
+      const trackingPortfolios = portfoliosWithBalances.filter(p => p.exchange !== 'revolutx');
+      if (trackingPortfolios.length > 0) {
+        const statsPromises = trackingPortfolios.map(p => apiService.getPortfolioStats(p.id));
         const allStats = await Promise.all(statsPromises);
         
         const aggregated = allStats.reduce(
@@ -63,8 +91,15 @@ const Dashboard: React.FC = () => {
     try {
       setRefreshing(true);
       setError('');
-      const result = await apiService.refreshAllPortfolios();
-      setPortfolios(result.portfolios);
+      
+      // Refresh P/L tracking portfolios
+      const trackingPortfolios = portfolios.filter(p => p.exchange !== 'revolutx');
+      if (trackingPortfolios.length > 0) {
+        await apiService.refreshAllPortfolios();
+      }
+      
+      // Reload all data (including Revolut X balances)
+      await loadData();
     } catch (err: any) {
       console.error('Error refreshing portfolios:', err);
       setError('Failed to refresh prices');
@@ -88,6 +123,10 @@ const Dashboard: React.FC = () => {
   const profitLossPercentage = totals.totalInvested > 0
     ? ((totals.profitLoss / totals.totalInvested) * 100).toFixed(2)
     : '0.00';
+
+  // Detect if we have any EUR portfolios
+  const hasEurPortfolio = portfolios.some(p => p.exchange === 'revolutx');
+  const currencySymbol = hasEurPortfolio ? '€' : '$';
 
   // For now, link to first portfolio's transfers page
   const firstPortfolioId = portfolios.length > 0 ? portfolios[0].id : '';
@@ -127,16 +166,16 @@ const Dashboard: React.FC = () => {
         <div className="stats-grid">
           <div className="stat-card">
             <h3>Total Invested</h3>
-            <p className="stat-value">${totals.totalInvested.toFixed(2)}</p>
+            <p className="stat-value">{currencySymbol}{totals.totalInvested.toFixed(2)}</p>
           </div>
           <div className="stat-card">
             <h3>Current Value</h3>
-            <p className="stat-value">${totals.currentValue.toFixed(2)}</p>
+            <p className="stat-value">{currencySymbol}{totals.currentValue.toFixed(2)}</p>
           </div>
           <div className="stat-card">
             <h3>Profit/Loss</h3>
             <p className={`stat-value ${totals.profitLoss >= 0 ? 'positive' : 'negative'}`}>
-              ${totals.profitLoss.toFixed(2)}
+              {currencySymbol}{totals.profitLoss.toFixed(2)}
               <span className="percentage"> ({profitLossPercentage}%)</span>
             </p>
           </div>
@@ -180,6 +219,41 @@ const Dashboard: React.FC = () => {
           ) : (
             <div className="portfolio-grid">
               {portfolios.map((portfolio) => {
+                const isSimpleView = portfolio.exchange === 'revolutx';
+                const portfolioCurrency = isSimpleView ? '€' : '$';
+                
+                if (isSimpleView) {
+                  // Simple balance view (no P/L)
+                  return (
+                    <Link
+                      key={portfolio.id}
+                      to={`/portfolios/${portfolio.id}`}
+                      className="portfolio-card"
+                    >
+                      <h3>{portfolio.name}</h3>
+                      {portfolio.description && <p className="description">{portfolio.description}</p>}
+                      <div className="portfolio-stats">
+                        <div>
+                          <span className="label">Invested:</span>
+                          <span className="value">{portfolioCurrency}{(portfolio.currentValue || 0).toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <span className="label">Value:</span>
+                          <span className="value">{portfolioCurrency}{(portfolio.currentValue || 0).toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <span className="label">P/L:</span>
+                          <span className="value positive">
+                            {portfolioCurrency}0.00
+                            <span className="percentage-small"> (0.00%)</span>
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                }
+                
+                // Full P/L tracking view
                 const portfolioPL = portfolio.profitLoss || 0;
                 const portfolioInvested = portfolio.totalInvested || 0;
                 const portfolioPLPercent = portfolioInvested > 0 
@@ -197,16 +271,16 @@ const Dashboard: React.FC = () => {
                     <div className="portfolio-stats">
                       <div>
                         <span className="label">Invested:</span>
-                        <span className="value">${portfolioInvested.toFixed(2)}</span>
+                        <span className="value">{portfolioCurrency}{portfolioInvested.toFixed(2)}</span>
                       </div>
                       <div>
                         <span className="label">Value:</span>
-                        <span className="value">${(portfolio.currentValue || 0).toFixed(2)}</span>
+                        <span className="value">{portfolioCurrency}{(portfolio.currentValue || 0).toFixed(2)}</span>
                       </div>
                       <div>
                         <span className="label">P/L:</span>
                         <span className={`value ${portfolioPL >= 0 ? 'positive' : 'negative'}`}>
-                          ${portfolioPL.toFixed(2)}
+                          {portfolioCurrency}{portfolioPL.toFixed(2)}
                           <span className="percentage-small"> ({portfolioPLPercent}%)</span>
                         </span>
                       </div>
