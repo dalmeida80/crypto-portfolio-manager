@@ -238,70 +238,126 @@ export class RevolutXService {
   }
 
   /**
-   * Get trade history from historical orders with pagination support
-   * Fetches all pages automatically until no more data
+   * Fetch historical orders for a specific date range (max 7 days per request)
+   * Includes cursor-based pagination
+   */
+  private async fetchHistoricalOrdersChunk(
+    startDate: number,
+    endDate: number,
+    limit: number = 100
+  ): Promise<any[]> {
+    const allOrders: any[] = [];
+    let cursor: string | null = null;
+    let pageCount = 0;
+    const maxPages = 20; // Safety limit per chunk
+
+    do {
+      pageCount++;
+      
+      const queryParams: Record<string, any> = { 
+        limit,
+        start_date: startDate,
+        end_date: endDate
+      };
+      
+      if (cursor) {
+        queryParams.cursor = cursor;
+      }
+
+      const response = await this.makeAuthenticatedRequest(
+        'GET',
+        '/api/1.0/orders/historical',
+        queryParams
+      );
+      
+      const orders = response.data || response || [];
+      const metadata = response.metadata || {};
+      
+      allOrders.push(...orders);
+      
+      // Get next cursor
+      cursor = metadata.next_cursor || null;
+      
+      // Safety check
+      if (pageCount >= maxPages) {
+        console.warn(`[Revolut X] Reached max page limit (${maxPages}) for chunk, stopping pagination`);
+        break;
+      }
+    } while (cursor);
+    
+    return allOrders;
+  }
+
+  /**
+   * Get trade history with automatic chunking to bypass 7-day limit
+   * Splits requests into 7-day windows and fetches all historical data
    */
   async getTradeHistory(limit: number = 100, fromTimestamp?: number): Promise<any[]> {
     try {
       const allTrades: any[] = [];
-      let cursor: string | null = null;
-      let pageCount = 0;
-      const maxPages = 50; // Safety limit
-
-      do {
-        pageCount++;
-        
-        const queryParams: Record<string, any> = { limit };
-        
-        if (fromTimestamp && !cursor) {
-          // Only use dates on first request
-          queryParams.start_date = fromTimestamp;
-          queryParams.end_date = Date.now();
-        }
-        
-        if (cursor) {
-          queryParams.cursor = cursor;
-        }
-
-        console.log(`[Revolut X] Fetching page ${pageCount}${cursor ? ' (cursor: ' + cursor.substring(0, 20) + '...)' : ''}`);
-        
-        const response = await this.makeAuthenticatedRequest(
-          'GET',
-          '/api/1.0/orders/historical',
-          queryParams
-        );
-        
-        const orders = response.data || response || [];
-        const metadata = response.metadata || {};
-        
-        console.log(`[Revolut X] Page ${pageCount}: ${orders.length} orders, has next: ${!!metadata.next_cursor}`);
-        
-        // Convert filled orders to trades
-        for (const order of orders) {
-          if (order.filled_quantity && parseFloat(order.filled_quantity) > 0) {
-            allTrades.push({
-              id: order.id,
-              symbol: order.symbol,
-              side: order.side,
-              quantity: order.filled_quantity,
-              price: order.average_price || order.limit_price || 0,
-              timestamp: order.updated_at || order.created_at,
-              status: order.status,
-            });
-          }
-        }
-        
-        // Get next cursor
-        cursor = metadata.next_cursor || null;
-        
-        // Safety check
-        if (pageCount >= maxPages) {
-          console.warn(`[Revolut X] Reached max page limit (${maxPages}), stopping pagination`);
-          break;
-        }
-      } while (cursor);
+      const now = Date.now();
       
-      console.log(`[Revolut X] Total fetched: ${allTrades.length} trades from ${pageCount} page(s)`);
+      // Default to 1 year ago if no start date provided
+      const startTimestamp = fromTimestamp || (now - (365 * 24 * 60 * 60 * 1000));
+      
+      // Calculate 7-day chunks (6 days to be safe)
+      const CHUNK_SIZE_MS = 6 * 24 * 60 * 60 * 1000; // 6 days in milliseconds
+      const chunks: Array<{ start: number; end: number }> = [];
+      
+      let currentStart = startTimestamp;
+      while (currentStart < now) {
+        const currentEnd = Math.min(currentStart + CHUNK_SIZE_MS, now);
+        chunks.push({ start: currentStart, end: currentEnd });
+        currentStart = currentEnd + 1; // Move to next chunk
+      }
+      
+      console.log(`[Revolut X] Fetching history in ${chunks.length} chunk(s) of ~6 days each`);
+      console.log(`[Revolut X] Date range: ${new Date(startTimestamp).toISOString()} to ${new Date(now).toISOString()}`);
+      
+      // Fetch each chunk
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        const chunkStart = new Date(chunk.start).toISOString().split('T')[0];
+        const chunkEnd = new Date(chunk.end).toISOString().split('T')[0];
+        
+        console.log(`[Revolut X] Chunk ${i + 1}/${chunks.length}: ${chunkStart} to ${chunkEnd}`);
+        
+        try {
+          const orders = await this.fetchHistoricalOrdersChunk(chunk.start, chunk.end, limit);
+          console.log(`[Revolut X] Chunk ${i + 1}: fetched ${orders.length} orders`);
+          
+          // Convert filled orders to trades
+          for (const order of orders) {
+            if (order.filled_quantity && parseFloat(order.filled_quantity) > 0) {
+              allTrades.push({
+                id: order.id,
+                symbol: order.symbol,
+                side: order.side,
+                quantity: order.filled_quantity,
+                price: order.average_price || order.limit_price || 0,
+                timestamp: order.updated_at || order.created_at,
+                status: order.status,
+              });
+            }
+          }
+          
+          // If chunk returned 0 orders, we might have reached the beginning
+          if (orders.length === 0 && i > 0) {
+            console.log(`[Revolut X] No more orders found, stopping early at chunk ${i + 1}`);
+            break;
+          }
+          
+          // Small delay between chunks to avoid rate limiting
+          if (i < chunks.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        } catch (error: any) {
+          console.error(`[Revolut X] Error fetching chunk ${i + 1}:`, error.message);
+          // Continue with next chunk instead of failing completely
+        }
+      }
+      
+      console.log(`[Revolut X] Total fetched: ${allTrades.length} trades from ${chunks.length} chunk(s)`);
       return allTrades;
       
     } catch (error) {
