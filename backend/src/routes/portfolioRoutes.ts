@@ -20,6 +20,9 @@ import {
   syncBinanceTrades,
   getPortfolioAnalytics,
 } from '../controllers/syncController';
+import {
+  getPortfolioBalances,
+} from '../controllers/portfolioBalanceController';
 
 const router = Router();
 
@@ -36,6 +39,9 @@ router.delete('/:portfolioId', authenticate, deletePortfolio);
 
 // Portfolio-specific stats
 router.get('/:portfolioId/stats', authenticate, getPortfolioStats);
+
+// Simple balance view (no P/L tracking)
+router.get('/:portfolioId/balances', authenticate, getPortfolioBalances);
 
 // Closed positions and transfers
 router.get('/:portfolioId/closed-positions', authenticate, getPortfolioClosedPositions);
