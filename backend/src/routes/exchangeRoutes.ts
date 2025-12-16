@@ -5,6 +5,7 @@ import {
   deleteApiKey,
   getBalances,
   importAllTrades,
+  importRevolutXCsv,
   getImportStatus
 } from '../controllers/exchangeController';
 import { authenticate } from '../middleware/auth';
@@ -19,6 +20,7 @@ router.get('/api-keys/:apiKeyId/balances', authenticate, getBalances);
 
 // Trade import (uses portfolio.exchange to filter which APIs to use)
 router.post('/portfolios/:portfolioId/import-all', authenticate, importAllTrades);
+router.post('/portfolios/:portfolioId/import-csv', authenticate, importRevolutXCsv);
 router.get('/portfolios/:portfolioId/import-status', authenticate, getImportStatus);
 
 export default router;
