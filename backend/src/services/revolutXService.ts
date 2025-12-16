@@ -8,7 +8,9 @@ import { ExchangeApiKey } from '../entities/ExchangeApiKey';
  * 
  * Authentication uses Ed25519 signatures:
  * - Headers: X-Revx-API-Key, X-Revx-Timestamp, X-Revx-Signature
- * - Signature is created from: timestamp + method + path + body
+ * - Signature is created from: timestamp + method + path + queryString + body
+ * - Path must start with /api
+ * - Signature must be base64 encoded (not hex)
  */
 export class RevolutXService {
   private client: AxiosInstance;
@@ -21,7 +23,7 @@ export class RevolutXService {
     this.privateKey = this.parsePrivateKey(privateKeyInput);
     
     this.client = axios.create({
-      baseURL: 'https://api.revolut.com/api/1.0',
+      baseURL: 'https://api.revolut.com',
       timeout: 30000,
     });
   }
@@ -31,7 +33,7 @@ export class RevolutXService {
    */
   static async createFromApiKey(exchangeApiKey: ExchangeApiKey): Promise<RevolutXService> {
     const apiKey = decrypt(exchangeApiKey.apiKey);
-    const privateKeyInput = decrypt(exchangeApiKey.apiSecret); // Store private key in apiSecret field
+    const privateKeyInput = decrypt(exchangeApiKey.apiSecret);
     return new RevolutXService(apiKey, privateKeyInput);
   }
 
@@ -40,7 +42,6 @@ export class RevolutXService {
    * Ed25519 private key must be 64 bytes (32 byte seed + 32 byte public key)
    */
   private parsePrivateKey(input: string): Uint8Array {
-    // Remove whitespace
     input = input.trim();
 
     // If it's PEM format, extract the base64 content
@@ -50,29 +51,22 @@ export class RevolutXService {
         .replace(/-----END PRIVATE KEY-----/, '')
         .replace(/\s/g, '');
       
-      // Decode base64
       const der = this.base64ToUint8Array(base64);
-      
-      // Ed25519 private key in DER format:
-      // The actual key is the last 32 bytes of the DER structure
-      // Extract seed (32 bytes) and derive full keypair
       const seed = der.slice(-32);
       const keypair = nacl.sign.keyPair.fromSeed(seed);
-      return keypair.secretKey; // This is 64 bytes
+      return keypair.secretKey; // 64 bytes
     }
     
     // If it's hex format
     if (/^[0-9a-fA-F]+$/.test(input.replace(/\s/g, ''))) {
       const hex = input.replace(/\s/g, '');
       
-      // If 32 bytes (64 hex chars), it's the seed
       if (hex.length === 64) {
         const seed = this.hexToUint8Array(hex);
         const keypair = nacl.sign.keyPair.fromSeed(seed);
-        return keypair.secretKey; // 64 bytes
+        return keypair.secretKey;
       }
       
-      // If 64 bytes (128 hex chars), it's the full secret key
       if (hex.length === 128) {
         return this.hexToUint8Array(hex);
       }
@@ -105,28 +99,32 @@ export class RevolutXService {
   }
 
   /**
-   * Convert Uint8Array to hex string
+   * Convert Uint8Array to base64 string
    */
-  private uint8ArrayToHex(arr: Uint8Array): string {
-    return Array.from(arr)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+  private uint8ArrayToBase64(arr: Uint8Array): string {
+    return Buffer.from(arr).toString('base64');
   }
 
   /**
    * Generate Ed25519 signature for API request
-   * Message format: timestamp + method + path + body
+   * Message format: timestamp + method + path + queryString + body
+   * Path must start with /api
+   * Query string without '?'
+   * Signature is base64 encoded
    */
   private generateSignature(
     timestamp: string,
     method: string,
     path: string,
+    queryString: string = '',
     body: string = ''
   ): string {
-    const message = timestamp + method.toUpperCase() + path + body;
+    // Construct message: timestamp + METHOD + /api/path + query + body
+    const message = timestamp + method.toUpperCase() + path + queryString + body;
     const messageBytes = new TextEncoder().encode(message);
     const signature = nacl.sign.detached(messageBytes, this.privateKey);
-    return this.uint8ArrayToHex(signature);
+    // Return base64 encoded signature (not hex!)
+    return this.uint8ArrayToBase64(signature);
   }
 
   /**
@@ -135,11 +133,23 @@ export class RevolutXService {
   private async makeAuthenticatedRequest(
     method: 'GET' | 'POST',
     path: string,
+    queryParams?: Record<string, any>,
     data?: any
   ): Promise<any> {
     const timestamp = Date.now().toString();
+    
+    // Build query string
+    const queryString = queryParams
+      ? Object.entries(queryParams)
+          .map(([key, value]) => `${key}=${value}`)
+          .join('&')
+      : '';
+    
+    // Body as JSON string
     const body = data ? JSON.stringify(data) : '';
-    const signature = this.generateSignature(timestamp, method, path, body);
+    
+    // Generate signature with query string
+    const signature = this.generateSignature(timestamp, method, path, queryString, body);
 
     const headers = {
       'X-Revx-API-Key': this.apiKey,
@@ -152,6 +162,7 @@ export class RevolutXService {
       const response = await this.client.request({
         method,
         url: path,
+        params: queryParams,
         headers,
         data,
       });
@@ -171,7 +182,7 @@ export class RevolutXService {
    */
   async testConnection(): Promise<boolean> {
     try {
-      await this.makeAuthenticatedRequest('GET', '/crypto-exchange/balances');
+      await this.makeAuthenticatedRequest('GET', '/api/1.0/crypto-exchange/balances');
       return true;
     } catch (error) {
       console.error('Revolut X connection test failed:', error);
@@ -184,27 +195,33 @@ export class RevolutXService {
    */
   async getAccountBalances(): Promise<any[]> {
     try {
-      const data = await this.makeAuthenticatedRequest('GET', '/crypto-exchange/balances');
-      // Filter balances with quantity > 0
-      return data.filter((balance: any) => parseFloat(balance.quantity || 0) > 0);
+      const data = await this.makeAuthenticatedRequest('GET', '/api/1.0/crypto-exchange/balances');
+      // Filter balances with total > 0
+      return data.filter((balance: any) => parseFloat(balance.total || 0) > 0);
     } catch (error) {
       throw new Error(`Failed to fetch Revolut X balances: ${error}`);
     }
   }
 
   /**
-   * Get trade history
-   * @param limit - Number of trades to fetch (default 1000)
+   * Get trade history (fills)
+   * @param limit - Number of trades to fetch (default 100, max 1000)
    * @param fromTimestamp - Start timestamp in milliseconds
    */
-  async getTradeHistory(limit: number = 1000, fromTimestamp?: number): Promise<any[]> {
+  async getTradeHistory(limit: number = 100, fromTimestamp?: number): Promise<any[]> {
     try {
-      let path = `/crypto-exchange/trades?limit=${limit}`;
+      const queryParams: Record<string, any> = { limit };
+      
       if (fromTimestamp) {
-        path += `&from=${fromTimestamp}`;
+        queryParams.from = fromTimestamp;
       }
 
-      const data = await this.makeAuthenticatedRequest('GET', path);
+      const data = await this.makeAuthenticatedRequest(
+        'GET',
+        '/api/1.0/crypto-exchange/trades',
+        queryParams
+      );
+      
       return data;
     } catch (error) {
       console.error('Failed to fetch Revolut X trade history:', error);
@@ -214,15 +231,13 @@ export class RevolutXService {
 
   /**
    * Convert Revolut X trade to internal format
-   * Revolut X format: { id, timestamp, symbol, side, quantity, price, fee, ... }
-   * Internal format: { externalId, timestamp, symbol, side, quantity, price, fee, feeCurrency, type }
    */
   convertToInternalFormat(trade: any): any {
     return {
       externalId: trade.id?.toString() || '',
       timestamp: new Date(trade.timestamp || trade.created_at),
       symbol: this.normalizeSymbol(trade.symbol || trade.pair),
-      side: (trade.side || '').toLowerCase(), // 'buy' or 'sell'
+      side: (trade.side || '').toLowerCase(),
       quantity: parseFloat(trade.quantity || trade.amount || 0),
       price: parseFloat(trade.price || 0),
       fee: parseFloat(trade.fee || 0),
