@@ -41,8 +41,6 @@ export class TradeImportService {
 
   /**
    * Import trades from Binance for a specific portfolio
-   * Uses getAllMyTrades() to fetch everything
-   * Deposits and withdrawals are saved to transfers table (not trades)
    */
   private async importBinanceTrades(
     portfolioId: string,
@@ -59,7 +57,7 @@ export class TradeImportService {
       console.log(`Import start date: ${startDate.toISOString()}`);
     }
 
-    // Fetch ALL trades using the comprehensive method
+    // Fetch ALL trades
     console.log('Fetching ALL trades from Binance...');
     const allBinanceTrades = await binance.getAllMyTrades(startTime);
     console.log(`Total trades fetched from Binance: ${allBinanceTrades.length}`);
@@ -267,7 +265,7 @@ export class TradeImportService {
       const trade = new Trade();
       trade.portfolioId = portfolioId;
       trade.symbol = converted.symbol;
-      trade.type = converted.side.toUpperCase(); // 'BUY' or 'SELL'
+      trade.type = converted.side.toUpperCase();
       trade.quantity = converted.quantity;
       trade.price = converted.price;
       trade.fee = converted.fee;
@@ -294,11 +292,12 @@ export class TradeImportService {
   }
 
   /**
-   * Import trades from any exchange for a specific portfolio
+   * Import trades from all active API keys matching portfolio exchange
+   * If portfolio.exchange is set, only import from that exchange
+   * If portfolio.exchange is null, import from all exchanges
    */
-  async importTrades(
+  async importFromAllSources(
     portfolioId: string,
-    apiKeyId: string,
     userId: string,
     startDate?: Date
   ): Promise<ImportResult> {
@@ -306,7 +305,7 @@ export class TradeImportService {
     const apiKeyRepo = AppDataSource.getRepository(ExchangeApiKey);
 
     try {
-      // Verify portfolio ownership
+      // Get portfolio
       const portfolio = await portfolioRepo.findOne({
         where: { id: portfolioId, userId }
       });
@@ -322,58 +321,87 @@ export class TradeImportService {
         };
       }
 
-      // Get API key
-      const apiKey = await apiKeyRepo.findOne({
-        where: { id: apiKeyId, userId }
+      // Get active API keys
+      let apiKeys = await apiKeyRepo.find({
+        where: { userId, isActive: true }
       });
 
-      if (!apiKey) {
+      // Filter by portfolio exchange if specified
+      if (portfolio.exchange) {
+        apiKeys = apiKeys.filter(key => key.exchange === portfolio.exchange);
+        console.log(`Portfolio ${portfolio.name} is set to exchange: ${portfolio.exchange}`);
+        console.log(`Found ${apiKeys.length} matching API key(s)`);
+      } else {
+        console.log(`Portfolio ${portfolio.name} has no exchange restriction, using all ${apiKeys.length} API key(s)`);
+      }
+
+      if (apiKeys.length === 0) {
+        const exchangeMsg = portfolio.exchange 
+          ? ` for ${portfolio.exchange}`
+          : '';
         return {
           success: false,
           imported: 0,
           skipped: 0,
           errors: 1,
           trades: [],
-          message: 'API key not found or access denied'
+          message: `No active API keys found${exchangeMsg}. Please add an exchange API key in Settings.`
         };
       }
 
-      let result: Omit<ImportResult, 'success' | 'message'>;
+      // Import from each API key
+      let totalImported = 0;
+      let totalSkipped = 0;
+      let totalErrors = 0;
+      let totalDeposits = 0;
+      let totalWithdrawals = 0;
+      const allTrades: Trade[] = [];
 
-      // Import based on exchange type
-      if (apiKey.exchange === 'binance') {
-        const binance = await BinanceService.createFromApiKey(apiKey);
-        result = await this.importBinanceTrades(portfolioId, binance, startDate);
-      } else if (apiKey.exchange === 'revolutx') {
-        const revolutX = await RevolutXService.createFromApiKey(apiKey);
-        result = await this.importRevolutXTrades(portfolioId, revolutX, startDate);
-      } else {
-        return {
-          success: false,
-          imported: 0,
-          skipped: 0,
-          errors: 1,
-          trades: [],
-          message: `Unsupported exchange: ${apiKey.exchange}`
-        };
+      for (const apiKey of apiKeys) {
+        try {
+          let result: Omit<ImportResult, 'success' | 'message'>;
+
+          if (apiKey.exchange === 'binance') {
+            const binance = await BinanceService.createFromApiKey(apiKey);
+            result = await this.importBinanceTrades(portfolioId, binance, startDate);
+          } else if (apiKey.exchange === 'revolutx') {
+            const revolutX = await RevolutXService.createFromApiKey(apiKey);
+            result = await this.importRevolutXTrades(portfolioId, revolutX, startDate);
+          } else {
+            console.warn(`Unsupported exchange: ${apiKey.exchange}`);
+            continue;
+          }
+
+          totalImported += result.imported;
+          totalSkipped += result.skipped;
+          totalErrors += result.errors;
+          totalDeposits += result.depositsImported || 0;
+          totalWithdrawals += result.withdrawalsImported || 0;
+          allTrades.push(...result.trades);
+        } catch (error: any) {
+          console.error(`Error importing from ${apiKey.exchange}:`, error);
+          totalErrors++;
+        }
       }
 
       // Update portfolio values if trades were imported
-      if (result.imported > 0) {
+      if (totalImported > 0) {
         console.log(`Updating portfolio ${portfolioId} values...`);
         await this.portfolioUpdateService.updatePortfolio(portfolioId);
       }
 
-      const message = apiKey.exchange === 'binance'
-        ? `Successfully imported ${result.imported} trades, ${result.depositsImported} deposits, ${result.withdrawalsImported} withdrawals. ${result.skipped} already existed.`
-        : `Successfully imported ${result.imported} trades from Revolut X. ${result.skipped} already existed.`;
+      const exchangeList = [...new Set(apiKeys.map(k => k.exchange))].join(', ');
 
       return {
-        ...result,
-        success: true,
-        message
+        success: totalErrors === 0,
+        imported: totalImported,
+        skipped: totalSkipped,
+        errors: totalErrors,
+        trades: allTrades,
+        depositsImported: totalDeposits,
+        withdrawalsImported: totalWithdrawals,
+        message: `Imported ${totalImported} trades, ${totalDeposits} deposits, ${totalWithdrawals} withdrawals from ${exchangeList}`
       };
-
     } catch (error: any) {
       console.error('Import trades error:', error);
       return {
@@ -385,68 +413,6 @@ export class TradeImportService {
         message: error.message || 'Failed to import trades'
       };
     }
-  }
-
-  /**
-   * Import trades from all active API keys for a portfolio
-   */
-  async importFromAllSources(
-    portfolioId: string,
-    userId: string,
-    startDate?: Date
-  ): Promise<ImportResult> {
-    const apiKeyRepo = AppDataSource.getRepository(ExchangeApiKey);
-
-    // Get all active API keys for user
-    const apiKeys = await apiKeyRepo.find({
-      where: { userId, isActive: true }
-    });
-
-    if (apiKeys.length === 0) {
-      return {
-        success: false,
-        imported: 0,
-        skipped: 0,
-        errors: 1,
-        trades: [],
-        message: 'No active API keys found. Please add an exchange API key first.'
-      };
-    }
-
-    // Import from each API key
-    let totalImported = 0;
-    let totalSkipped = 0;
-    let totalErrors = 0;
-    let totalDeposits = 0;
-    let totalWithdrawals = 0;
-    const allTrades: Trade[] = [];
-
-    for (const apiKey of apiKeys) {
-      const result = await this.importTrades(
-        portfolioId,
-        apiKey.id,
-        userId,
-        startDate
-      );
-
-      totalImported += result.imported;
-      totalSkipped += result.skipped;
-      totalErrors += result.errors;
-      totalDeposits += result.depositsImported || 0;
-      totalWithdrawals += result.withdrawalsImported || 0;
-      allTrades.push(...result.trades);
-    }
-
-    return {
-      success: totalErrors === 0,
-      imported: totalImported,
-      skipped: totalSkipped,
-      errors: totalErrors,
-      trades: allTrades,
-      depositsImported: totalDeposits,
-      withdrawalsImported: totalWithdrawals,
-      message: `Imported ${totalImported} trades, ${totalDeposits} deposits, ${totalWithdrawals} withdrawals from ${apiKeys.length} API key(s)`
-    };
   }
 
   /**
