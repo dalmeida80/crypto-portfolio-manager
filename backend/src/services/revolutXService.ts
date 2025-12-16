@@ -297,10 +297,11 @@ export class RevolutXService {
       const allTrades: any[] = [];
       const now = Date.now();
       
-      // Default to 1 year ago if no start date provided
-      const startTimestamp = fromTimestamp || (now - (365 * 24 * 60 * 60 * 1000));
+      // Default to 2 years ago if no start date provided (Revolut X launched mid-2024)
+      // This ensures we capture all possible history
+      const startTimestamp = fromTimestamp || (now - (730 * 24 * 60 * 60 * 1000)); // 2 years
       
-      // Calculate 7-day chunks (6 days to be safe)
+      // Calculate 6-day chunks (safety margin from 7-day API limit)
       const CHUNK_SIZE_MS = 6 * 24 * 60 * 60 * 1000; // 6 days in milliseconds
       const chunks: Array<{ start: number; end: number }> = [];
       
@@ -314,6 +315,9 @@ export class RevolutXService {
       console.log(`[Revolut X] Fetching history in ${chunks.length} chunk(s) of ~6 days each`);
       console.log(`[Revolut X] Date range: ${new Date(startTimestamp).toISOString()} to ${new Date(now).toISOString()}`);
       
+      let emptyChunksInARow = 0;
+      const MAX_EMPTY_CHUNKS = 5; // Stop if 5 consecutive empty chunks (30 days of no data)
+      
       // Fetch each chunk
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
@@ -325,6 +329,13 @@ export class RevolutXService {
         try {
           const orders = await this.fetchHistoricalOrdersChunk(chunk.start, chunk.end, limit);
           console.log(`[Revolut X] Chunk ${i + 1}: fetched ${orders.length} orders`);
+          
+          // Track empty chunks
+          if (orders.length === 0) {
+            emptyChunksInARow++;
+          } else {
+            emptyChunksInARow = 0; // Reset counter when we find data
+          }
           
           // Convert filled orders to trades
           for (const order of orders) {
@@ -341,9 +352,9 @@ export class RevolutXService {
             }
           }
           
-          // If chunk returned 0 orders, we might have reached the beginning
-          if (orders.length === 0 && i > 0) {
-            console.log(`[Revolut X] No more orders found, stopping early at chunk ${i + 1}`);
+          // Stop if too many consecutive empty chunks
+          if (emptyChunksInARow >= MAX_EMPTY_CHUNKS) {
+            console.log(`[Revolut X] ${MAX_EMPTY_CHUNKS} consecutive empty chunks, stopping early at chunk ${i + 1}`);
             break;
           }
           
