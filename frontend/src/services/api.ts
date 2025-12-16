@@ -87,6 +87,20 @@ export interface PortfolioStats {
   closedPositionsCount: number;
 }
 
+export interface PaginationMetadata {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
+export interface PaginatedTradesResponse {
+  data: Trade[];
+  pagination: PaginationMetadata;
+}
+
 class ApiService {
   private api: AxiosInstance;
 
@@ -192,9 +206,28 @@ class ApiService {
   }
 
   // Trade methods
-  async getTrades(portfolioId: string): Promise<Trade[]> {
-    const { data } = await this.api.get<Trade[]>(`/portfolios/${portfolioId}/trades`);
+  async getTrades(
+    portfolioId: string,
+    page: number = 1,
+    pageSize: number = 50,
+    source?: string,
+    symbol?: string
+  ): Promise<PaginatedTradesResponse> {
+    const params: any = { page, pageSize };
+    if (source) params.source = source;
+    if (symbol) params.symbol = symbol;
+
+    const { data } = await this.api.get<PaginatedTradesResponse>(
+      `/portfolios/${portfolioId}/trades`,
+      { params }
+    );
     return data;
+  }
+
+  // Backward compatibility: get all trades without pagination
+  async getAllTrades(portfolioId: string): Promise<Trade[]> {
+    const response = await this.getTrades(portfolioId, 1, 1000);
+    return response.data;
   }
 
   async createTrade(trade: CreateTradeDto): Promise<Trade> {
