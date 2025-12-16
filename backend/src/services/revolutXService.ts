@@ -6,10 +6,12 @@ import { ExchangeApiKey } from '../entities/ExchangeApiKey';
 /**
  * RevolutXService - Handles Revolut X API authentication and data fetching
  * 
- * Correct configuration:
- * - Base URL: https://revx.revolut.com
- * - Signature format: timestamp + METHOD + path
- * - Headers: X-Revx-API-Key, X-Revx-Timestamp, X-Revx-Signature (base64)
+ * Authentication:
+ * - Headers: X-Revx-API-Key, X-Revx-Timestamp, X-Revx-Signature
+ * - Signature format: timestamp + METHOD + path + queryString + body
+ * - Ed25519 signature, base64 encoded
+ * 
+ * Documentation: https://developer.revolut.com/docs/x-api/revolut-x-crypto-exchange-rest-api
  */
 export class RevolutXService {
   private client: AxiosInstance;
@@ -115,18 +117,40 @@ export class RevolutXService {
   }
 
   /**
-   * Generate Ed25519 signature
-   * Format: timestamp + METHOD + path
+   * Generate Ed25519 signature according to Revolut X spec
+   * Format: timestamp + METHOD + path + queryString + body
+   * @param timestamp Unix timestamp in milliseconds
+   * @param method HTTP method (GET, POST)
+   * @param path Request path (e.g., /api/1.0/fills)
+   * @param queryString URL query string without '?' (e.g., limit=10&from=123)
+   * @param body Request body as JSON string
    */
   private generateSignature(
     timestamp: string,
     method: string,
-    path: string
+    path: string,
+    queryString: string = '',
+    body: string = ''
   ): string {
-    const message = timestamp + method.toUpperCase() + path;
+    const message = timestamp + method.toUpperCase() + path + queryString + body;
     const messageBytes = new TextEncoder().encode(message);
     const signature = nacl.sign.detached(messageBytes, this.privateKey);
     return this.uint8ArrayToBase64(signature);
+  }
+
+  /**
+   * Build query string from params object
+   * @param params Query parameters object
+   * @returns Query string without '?' prefix (e.g., "limit=10&from=123")
+   */
+  private buildQueryString(params?: Record<string, any>): string {
+    if (!params || Object.keys(params).length === 0) {
+      return '';
+    }
+    
+    return Object.entries(params)
+      .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+      .join('&');
   }
 
   private async makeAuthenticatedRequest(
@@ -136,7 +160,9 @@ export class RevolutXService {
     data?: any
   ): Promise<any> {
     const timestamp = Date.now().toString();
-    const signature = this.generateSignature(timestamp, method, path);
+    const queryString = this.buildQueryString(queryParams);
+    const body = data ? JSON.stringify(data) : '';
+    const signature = this.generateSignature(timestamp, method, path, queryString, body);
 
     const headers = {
       'X-Revx-API-Key': this.apiKey,
