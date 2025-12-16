@@ -4,13 +4,14 @@ import { ExchangeApiKey } from '../entities/ExchangeApiKey';
 import { AuthRequest } from '../middleware/auth';
 import { encrypt } from '../utils/encryption';
 import { BinanceService } from '../services/binanceService';
+import { RevolutXService } from '../services/revolutXService';
 import { TradeImportService } from '../services/tradeImportService';
 
 const tradeImportService = new TradeImportService();
 
 export const addApiKey = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { apiKey, apiSecret, label } = req.body;
+    const { apiKey, apiSecret, label, exchange = 'binance' } = req.body;
     const userId = req.user!.userId;
 
     if (!apiKey || !apiSecret) {
@@ -18,9 +19,21 @@ export const addApiKey = async (req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
-    // Test connection
-    const binance = new BinanceService(apiKey, apiSecret);
-    const isValid = await binance.testConnection();
+    if (!['binance', 'revolutx'].includes(exchange)) {
+      res.status(400).json({ error: 'Invalid exchange. Supported: binance, revolutx' });
+      return;
+    }
+
+    // Test connection based on exchange type
+    let isValid = false;
+
+    if (exchange === 'binance') {
+      const binance = new BinanceService(apiKey, apiSecret);
+      isValid = await binance.testConnection();
+    } else if (exchange === 'revolutx') {
+      const revolutX = new RevolutXService(apiKey, apiSecret);
+      isValid = await revolutX.testConnection();
+    }
 
     if (!isValid) {
       res.status(400).json({ error: 'Invalid API credentials' });
@@ -31,7 +44,7 @@ export const addApiKey = async (req: AuthRequest, res: Response): Promise<void> 
 
     const exchangeApiKey = new ExchangeApiKey();
     exchangeApiKey.userId = userId;
-    exchangeApiKey.exchange = 'binance';
+    exchangeApiKey.exchange = exchange;
     exchangeApiKey.apiKey = encrypt(apiKey);
     exchangeApiKey.apiSecret = encrypt(apiSecret);
     exchangeApiKey.label = label;
@@ -111,8 +124,18 @@ export const getBalances = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    const binance = await BinanceService.createFromApiKey(apiKey);
-    const balances = await binance.getAccountBalances();
+    let balances: any[];
+
+    if (apiKey.exchange === 'binance') {
+      const binance = await BinanceService.createFromApiKey(apiKey);
+      balances = await binance.getAccountBalances();
+    } else if (apiKey.exchange === 'revolutx') {
+      const revolutX = await RevolutXService.createFromApiKey(apiKey);
+      balances = await revolutX.getAccountBalances();
+    } else {
+      res.status(400).json({ error: 'Unsupported exchange' });
+      return;
+    }
 
     res.json({ balances });
   } catch (error) {
@@ -122,7 +145,7 @@ export const getBalances = async (req: AuthRequest, res: Response): Promise<void
 };
 
 /**
- * Import trades from Binance for a portfolio
+ * Import trades from exchange for a portfolio
  */
 export const importTrades = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
