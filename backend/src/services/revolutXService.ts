@@ -333,7 +333,13 @@ export class RevolutXService {
           
           // Log first order structure ONCE for debugging
           if (isFirstBatch && orders.length > 0) {
-            console.log('[Revolut X] Sample order structure:', JSON.stringify(orders[0], null, 2));
+            console.log('[Revolut X] Sample order:', {
+              symbol: orders[0].symbol,
+              side: orders[0].side,
+              filled_quantity: orders[0].filled_quantity,
+              average_fill_price: orders[0].average_fill_price,
+              created_date: orders[0].created_date
+            });
             isFirstBatch = false;
           }
           
@@ -347,20 +353,14 @@ export class RevolutXService {
           // Convert filled orders to trades
           for (const order of orders) {
             if (order.filled_quantity && parseFloat(order.filled_quantity) > 0) {
-              // Calculate price: quote_quantity / filled_quantity
-              const filledQty = parseFloat(order.filled_quantity);
-              const quoteQty = parseFloat(order.quote_quantity || 0);
-              const price = filledQty > 0 && quoteQty > 0 ? quoteQty / filledQty : 0;
-              
               allTrades.push({
                 id: order.id,
                 symbol: order.symbol,
                 side: order.side,
                 quantity: order.filled_quantity,
-                price: price,
-                timestamp: order.updated_at || order.created_at,
+                price: order.average_fill_price || order.price || 0,
+                timestamp: order.created_date,
                 status: order.status,
-                quote_quantity: order.quote_quantity,
               });
             }
           }
@@ -393,10 +393,10 @@ export class RevolutXService {
   convertToInternalFormat(trade: any): any {
     return {
       externalId: trade.id?.toString() || '',
-      timestamp: this.parseTimestamp(trade.timestamp || trade.updated_at || trade.created_at),
+      timestamp: this.parseTimestamp(trade.timestamp),
       symbol: this.normalizeSymbol(trade.symbol || ''),
       side: (trade.side || 'buy').toLowerCase(),
-      quantity: parseFloat(trade.quantity || trade.filled_quantity || 0),
+      quantity: parseFloat(trade.quantity || 0),
       price: parseFloat(trade.price || 0),
       fee: parseFloat(trade.fee || 0),
       feeCurrency: trade.fee_currency || trade.feeCurrency || 'EUR',
