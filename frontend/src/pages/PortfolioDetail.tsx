@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import apiService from '../services/api';
+import apiService, { BalanceResponse, SimpleHolding } from '../services/api';
 import { Portfolio, Trade, Holding } from '../types';
 
 
@@ -34,6 +34,7 @@ const PortfolioDetail: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [simpleBalances, setSimpleBalances] = useState<BalanceResponse | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +55,9 @@ const PortfolioDetail: React.FC = () => {
   });
   const [importing, setImporting] = useState(false);
 
+  // Check if this is a Revolut X portfolio (simple balance view)
+  const isSimpleBalanceView = portfolio?.exchange === 'revolutx';
+
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login');
@@ -68,15 +72,23 @@ const PortfolioDetail: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const [portfolioData, holdingsData, tradesData] = await Promise.all([
-        apiService.getPortfolio(id!),
-        apiService.getPortfolioHoldings(id!),
-        apiService.getAllTrades(id!),
-      ]);
-
+      // Always fetch portfolio info first
+      const portfolioData = await apiService.getPortfolio(id!);
       setPortfolio(portfolioData);
-      setHoldings(holdingsData);
-      setTrades(tradesData);
+
+      // If Revolut X, use simple balance view
+      if (portfolioData.exchange === 'revolutx') {
+        const balancesData = await apiService.getPortfolioBalances(id!);
+        setSimpleBalances(balancesData);
+      } else {
+        // Otherwise, use full view with P/L tracking
+        const [holdingsData, tradesData] = await Promise.all([
+          apiService.getPortfolioHoldings(id!),
+          apiService.getAllTrades(id!),
+        ]);
+        setHoldings(holdingsData);
+        setTrades(tradesData);
+      }
     } catch (err: any) {
       console.error('Error fetching portfolio:', err);
       setError(err.response?.data?.message || 'Failed to load portfolio');
@@ -148,8 +160,16 @@ const PortfolioDetail: React.FC = () => {
     try {
       setError(null);
       setSuccessMessage(null);
-      await apiService.refreshPortfolio(id!);
-      await fetchPortfolioData();
+      
+      if (isSimpleBalanceView) {
+        // For simple view, just refetch balances
+        await fetchPortfolioData();
+      } else {
+        // For full view, refresh prices through API
+        await apiService.refreshPortfolio(id!);
+        await fetchPortfolioData();
+      }
+      
       setSuccessMessage('✅ Prices refreshed successfully!');
       
       // Clear message after 3 seconds
@@ -171,15 +191,100 @@ const PortfolioDetail: React.FC = () => {
     return <div className="portfolio-detail">Portfolio not found</div>;
   }
 
-  // Detect currency based on holdings symbols
-  // If most symbols end with EUR, use € symbol, otherwise $
-  const isEurPortfolio = holdings.length > 0 && 
-    holdings.filter(h => h.symbol.endsWith('EUR')).length > holdings.length / 2;
-  const currencySymbol = isEurPortfolio ? '€' : '$';
+  // Detect currency based on portfolio exchange
+  const currencySymbol = portfolio.exchange === 'revolutx' ? '€' : '$';
 
-  // Safely calculate profit/loss percentage
-  const totalInvested = portfolio.totalInvested ?? 0;
+  // SIMPLE BALANCE VIEW (for Revolut X)
+  if (isSimpleBalanceView && simpleBalances) {
+    return (
+      <div className="portfolio-detail">
+        <button onClick={() => navigate('/dashboard')} className="btn-back">
+          ← Back to Dashboard
+        </button>
+
+        <div className="page-header">
+          <div>
+            <h1>{portfolio.name}</h1>
+            {portfolio.description && <p>{portfolio.description}</p>}
+            <span className="badge-info">Simple Balance View (No P/L Tracking)</span>
+          </div>
+          <div className="header-actions">
+            <button onClick={handleRefreshPrices} className="btn-secondary">
+              🔄 Refresh Balances
+            </button>
+          </div>
+        </div>
+
+        {successMessage && (
+          <div className="success-message">{successMessage}</div>
+        )}
+
+        <div className="stats-grid">
+          <div className="stat-card">
+            <h3>Total Value</h3>
+            <p className="stat-value">{currencySymbol}{formatNumber(simpleBalances.totalValue)}</p>
+            <p className="stat-hint">Live balance from exchange</p>
+          </div>
+          <div className="stat-card">
+            <h3>Assets</h3>
+            <p className="stat-value">{simpleBalances.holdings.length}</p>
+            <p className="stat-hint">Different cryptocurrencies</p>
+          </div>
+          <div className="stat-card">
+            <h3>Last Updated</h3>
+            <p className="stat-value">
+              {new Date(simpleBalances.updatedAt).toLocaleTimeString()}
+            </p>
+            <p className="stat-hint">{new Date(simpleBalances.updatedAt).toLocaleDateString()}</p>
+          </div>
+        </div>
+
+        <div className="holdings-section">
+          <div className="section-header">
+            <h2>Current Holdings</h2>
+          </div>
+
+          {simpleBalances.holdings.length === 0 ? (
+            <div className="holdings-table">
+              <p style={{ padding: '20px', textAlign: 'center' }}>No holdings</p>
+            </div>
+          ) : (
+            <div className="holdings-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Asset</th>
+                    <th>Quantity</th>
+                    <th>Current Price</th>
+                    <th>Current Value</th>
+                    <th>% of Portfolio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {simpleBalances.holdings.map((holding: SimpleHolding) => {
+                    const percentage = (holding.currentValue / simpleBalances.totalValue) * 100;
+                    return (
+                      <tr key={holding.symbol}>
+                        <td><strong>{holding.asset}</strong></td>
+                        <td>{formatNumber(holding.quantity, 8)}</td>
+                        <td>{currencySymbol}{formatPrice(holding.currentPrice)}</td>
+                        <td><strong>{currencySymbol}{formatNumber(holding.currentValue)}</strong></td>
+                        <td>{formatNumber(percentage)}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // FULL VIEW (for other portfolios with P/L tracking)
   const profitLoss = portfolio.profitLoss ?? 0;
+  const totalInvested = portfolio.totalInvested ?? 0;
   const profitLossPercentage = totalInvested > 0
     ? ((profitLoss / totalInvested) * 100)
     : 0;
