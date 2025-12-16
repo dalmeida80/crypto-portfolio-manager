@@ -15,10 +15,10 @@ export class RevolutXService {
   private apiKey: string;
   private privateKey: Uint8Array;
 
-  constructor(apiKey: string, privateKeyHex: string) {
+  constructor(apiKey: string, privateKeyInput: string) {
     this.apiKey = apiKey;
-    // Convert hex private key to Uint8Array for nacl
-    this.privateKey = this.hexToUint8Array(privateKeyHex);
+    // Parse private key from PEM or hex format
+    this.privateKey = this.parsePrivateKey(privateKeyInput);
     
     this.client = axios.create({
       baseURL: 'https://api.revolut.com/api/1.0',
@@ -31,16 +31,72 @@ export class RevolutXService {
    */
   static async createFromApiKey(exchangeApiKey: ExchangeApiKey): Promise<RevolutXService> {
     const apiKey = decrypt(exchangeApiKey.apiKey);
-    const privateKeyHex = decrypt(exchangeApiKey.apiSecret); // Store private key in apiSecret field
-    return new RevolutXService(apiKey, privateKeyHex);
+    const privateKeyInput = decrypt(exchangeApiKey.apiSecret); // Store private key in apiSecret field
+    return new RevolutXService(apiKey, privateKeyInput);
+  }
+
+  /**
+   * Parse private key from PEM or hex format
+   * Ed25519 private key must be 64 bytes (32 byte seed + 32 byte public key)
+   */
+  private parsePrivateKey(input: string): Uint8Array {
+    // Remove whitespace
+    input = input.trim();
+
+    // If it's PEM format, extract the base64 content
+    if (input.includes('BEGIN PRIVATE KEY')) {
+      const base64 = input
+        .replace(/-----BEGIN PRIVATE KEY-----/, '')
+        .replace(/-----END PRIVATE KEY-----/, '')
+        .replace(/\s/g, '');
+      
+      // Decode base64
+      const der = this.base64ToUint8Array(base64);
+      
+      // Ed25519 private key in DER format:
+      // The actual key is the last 32 bytes of the DER structure
+      // Extract seed (32 bytes) and derive full keypair
+      const seed = der.slice(-32);
+      const keypair = nacl.sign.keyPair.fromSeed(seed);
+      return keypair.secretKey; // This is 64 bytes
+    }
+    
+    // If it's hex format
+    if (/^[0-9a-fA-F]+$/.test(input.replace(/\s/g, ''))) {
+      const hex = input.replace(/\s/g, '');
+      
+      // If 32 bytes (64 hex chars), it's the seed
+      if (hex.length === 64) {
+        const seed = this.hexToUint8Array(hex);
+        const keypair = nacl.sign.keyPair.fromSeed(seed);
+        return keypair.secretKey; // 64 bytes
+      }
+      
+      // If 64 bytes (128 hex chars), it's the full secret key
+      if (hex.length === 128) {
+        return this.hexToUint8Array(hex);
+      }
+    }
+
+    throw new Error('Invalid private key format. Expected PEM or 64/128 character hex string.');
+  }
+
+  /**
+   * Convert base64 string to Uint8Array
+   */
+  private base64ToUint8Array(base64: string): Uint8Array {
+    const binaryString = Buffer.from(base64, 'base64').toString('binary');
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
   }
 
   /**
    * Convert hex string to Uint8Array
    */
   private hexToUint8Array(hex: string): Uint8Array {
-    // Remove any whitespace or newlines
-    hex = hex.replace(/\s/g, '');
     const bytes = new Uint8Array(hex.length / 2);
     for (let i = 0; i < hex.length; i += 2) {
       bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
