@@ -125,7 +125,7 @@ const PortfolioDetail: React.FC = () => {
       const withdrawalsInfo = result.withdrawalsImported ? `Withdrawals found: ${result.withdrawalsImported} (informational)` : '';
       
       setSuccessMessage(
-        `\u2705 Import completed!\n` +
+        `✅ Import completed!\n` +
         `Trades imported: ${result.imported}\n` +
         depositsInfo +
         withdrawalsInfo
@@ -150,7 +150,7 @@ const PortfolioDetail: React.FC = () => {
       setSuccessMessage(null);
       await apiService.refreshPortfolio(id!);
       await fetchPortfolioData();
-      setSuccessMessage('\u2705 Prices refreshed successfully!');
+      setSuccessMessage('✅ Prices refreshed successfully!');
       
       // Clear message after 3 seconds
       setTimeout(() => setSuccessMessage(null), 3000);
@@ -175,7 +175,7 @@ const PortfolioDetail: React.FC = () => {
   // If most symbols end with EUR, use € symbol, otherwise $
   const isEurPortfolio = holdings.length > 0 && 
     holdings.filter(h => h.symbol.endsWith('EUR')).length > holdings.length / 2;
-  const currencySymbol = isEurPortfolio ? '\u20ac' : '$';
+  const currencySymbol = isEurPortfolio ? '€' : '$';
 
   // Safely calculate profit/loss percentage
   const totalInvested = portfolio.totalInvested ?? 0;
@@ -187,7 +187,7 @@ const PortfolioDetail: React.FC = () => {
   return (
     <div className="portfolio-detail">
       <button onClick={() => navigate('/dashboard')} className="btn-back">
-        \u2190 Back to Dashboard
+        ← Back to Dashboard
       </button>
 
       <div className="page-header">
@@ -197,10 +197,10 @@ const PortfolioDetail: React.FC = () => {
         </div>
         <div className="header-actions">
           <button onClick={() => setShowImportForm(!showImportForm)} className="btn-success">
-            \ud83d\udce5 Import Trades
+            📥 Import Trades
           </button>
           <button onClick={handleRefreshPrices} className="btn-secondary">
-            \ud83d\udd04 Refresh Prices
+            🔄 Refresh Prices
           </button>
           <button onClick={() => setShowTradeForm(!showTradeForm)} className="btn-primary">
             + Add Trade
@@ -214,7 +214,7 @@ const PortfolioDetail: React.FC = () => {
 
       {showImportForm && (
         <div className="trade-form-card import-form">
-          <h2>\ud83d\udce5 Import Trades from Exchange</h2>
+          <h2>📥 Import Trades from Exchange</h2>
           <p className="form-description">
             Import your trading history from all connected exchanges (Binance, Revolut X, etc.)
           </p>
@@ -235,18 +235,18 @@ const PortfolioDetail: React.FC = () => {
             </div>
 
             <div className="import-info">
-              <h3>\u2139\ufe0f What will be imported:</h3>
+              <h3>ℹ️ What will be imported:</h3>
               <ul>
-                <li>\u2705 Spot trades (BUY/SELL) from all active API keys</li>
-                <li>\ud83d\udcca Deposits detected (Binance only, informational)</li>
-                <li>\ud83d\udcca Withdrawals detected (Binance only, informational)</li>
-                <li>\u26a0\ufe0f Rate limit: ~1200 requests/minute (Binance)</li>
+                <li>✅ Spot trades (BUY/SELL) from all active API keys</li>
+                <li>📊 Deposits detected (Binance only, informational)</li>
+                <li>📊 Withdrawals detected (Binance only, informational)</li>
+                <li>⚠️ Rate limit: ~1200 requests/minute (Binance)</li>
               </ul>
             </div>
 
             <div className="form-actions">
               <button type="submit" className="btn-success" disabled={importing}>
-                {importing ? '\u23f3 Importing...' : '\ud83d\ude80 Start Import'}
+                {importing ? '⏳ Importing...' : '🚀 Start Import'}
               </button>
               <button
                 type="button"
