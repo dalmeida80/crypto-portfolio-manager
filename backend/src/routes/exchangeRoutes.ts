@@ -4,7 +4,6 @@ import {
   listApiKeys, 
   deleteApiKey,
   getBalances,
-  importTrades,
   importAllTrades,
   getImportStatus
 } from '../controllers/exchangeController';
@@ -18,8 +17,7 @@ router.get('/api-keys', authenticate, listApiKeys);
 router.delete('/api-keys/:id', authenticate, deleteApiKey);
 router.get('/api-keys/:apiKeyId/balances', authenticate, getBalances);
 
-// Trade import
-router.post('/portfolios/:portfolioId/import', authenticate, importTrades);
+// Trade import (uses portfolio.exchange to filter which APIs to use)
 router.post('/portfolios/:portfolioId/import-all', authenticate, importAllTrades);
 router.get('/portfolios/:portfolioId/import-status', authenticate, getImportStatus);
 
