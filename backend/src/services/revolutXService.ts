@@ -119,7 +119,6 @@ export class RevolutXService {
   /**
    * Generate Ed25519 signature according to Revolut X spec
    * Format: timestamp + METHOD + path + queryString + body
-   * Note: queryString must NOT include URL encoding in signature (e.g., use ',' not '%2C')
    */
   private generateSignature(
     timestamp: string,
@@ -136,22 +135,25 @@ export class RevolutXService {
   }
 
   /**
-   * Build query string from params object
-   * For signature: NO URL encoding (raw values)
-   * For actual HTTP request: axios handles encoding
+   * Build query string that matches exactly what will be sent in the URL
+   * CRITICAL: Must match the exact order and format axios sends
    */
   private buildQueryStringForSignature(params?: Record<string, any>): string {
     if (!params || Object.keys(params).length === 0) {
       return '';
     }
     
-    // Sort keys alphabetically for consistent signature
-    const sortedKeys = Object.keys(params).sort();
+    // Build URL to see exactly what axios will send
+    const url = new URL('http://dummy.com');
+    Object.keys(params).forEach(key => {
+      url.searchParams.append(key, params[key]);
+    });
     
-    // NO URL encoding for signature - use raw values
-    return sortedKeys
-      .map((key) => `${key}=${params[key]}`)
-      .join('&');
+    // Get query string without '?'
+    const queryString = url.search.substring(1);
+    console.log('[Revolut X Debug] Query string from URLSearchParams:', queryString);
+    
+    return queryString;
   }
 
   private async makeAuthenticatedRequest(
@@ -202,7 +204,9 @@ export class RevolutXService {
 
   async testConnection(): Promise<boolean> {
     try {
+      console.log('[Revolut X] Testing connection with /api/1.0/balances...');
       await this.makeAuthenticatedRequest('GET', '/api/1.0/balances');
+      console.log('[Revolut X] Connection test PASSED');
       return true;
     } catch (error) {
       console.error('Revolut X connection test failed:', error);
@@ -222,10 +226,20 @@ export class RevolutXService {
 
   /**
    * Get trade history from historical orders
-   * Note: Revolut X API has a max 1 week difference between start_date and end_date
    */
   async getTradeHistory(limit: number = 100, fromTimestamp?: number): Promise<any[]> {
     try {
+      // First test: try WITHOUT query params to verify basic auth works
+      console.log('[Revolut X] Testing basic request without query params...');
+      try {
+        await this.makeAuthenticatedRequest('GET', '/api/1.0/balances');
+        console.log('[Revolut X] Basic auth works!');
+      } catch (e) {
+        console.error('[Revolut X] Basic auth FAILED:', e);
+        return [];
+      }
+
+      // Now try with query params
       const queryParams: Record<string, any> = { limit };
       
       if (fromTimestamp) {
@@ -233,6 +247,7 @@ export class RevolutXService {
         queryParams.end_date = Date.now();
       }
 
+      console.log('[Revolut X] Attempting historical orders request...');
       const response = await this.makeAuthenticatedRequest(
         'GET',
         '/api/1.0/orders/historical',
