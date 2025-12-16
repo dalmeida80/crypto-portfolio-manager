@@ -159,32 +159,25 @@ export class RevolutXService {
     body: string = ''
   ): string {
     const message = timestamp + method.toUpperCase() + path + queryString + body;
-    console.log('[Revolut X Debug] Signature message:', message);
     const messageBytes = new TextEncoder().encode(message);
     const signature = nacl.sign.detached(messageBytes, this.privateKey);
     return this.uint8ArrayToBase64(signature);
   }
 
   /**
-   * Build query string that matches exactly what will be sent in the URL
-   * CRITICAL: Must match the exact order and format axios sends
+   * Build query string for signature (must match axios output)
    */
   private buildQueryStringForSignature(params?: Record<string, any>): string {
     if (!params || Object.keys(params).length === 0) {
       return '';
     }
     
-    // Build URL to see exactly what axios will send
     const url = new URL('http://dummy.com');
     Object.keys(params).forEach(key => {
       url.searchParams.append(key, params[key]);
     });
     
-    // Get query string without '?'
-    const queryString = url.search.substring(1);
-    console.log('[Revolut X Debug] Query string from URLSearchParams:', queryString);
-    
-    return queryString;
+    return url.search.substring(1);
   }
 
   private async makeAuthenticatedRequest(
@@ -197,14 +190,6 @@ export class RevolutXService {
     const queryStringForSignature = this.buildQueryStringForSignature(queryParams);
     const body = data ? JSON.stringify(data) : '';
     const signature = this.generateSignature(timestamp, method, path, queryStringForSignature, body);
-
-    console.log('[Revolut X Debug] Request:', {
-      method,
-      path,
-      queryParams,
-      timestamp,
-      hasBody: !!body,
-    });
 
     const headers = {
       'X-Revx-API-Key': this.apiKey,
@@ -235,9 +220,7 @@ export class RevolutXService {
 
   async testConnection(): Promise<boolean> {
     try {
-      console.log('[Revolut X] Testing connection with /api/1.0/balances...');
       await this.makeAuthenticatedRequest('GET', '/api/1.0/balances');
-      console.log('[Revolut X] Connection test PASSED');
       return true;
     } catch (error) {
       console.error('Revolut X connection test failed:', error);
@@ -248,7 +231,6 @@ export class RevolutXService {
   async getAccountBalances(): Promise<any[]> {
     try {
       const data = await this.makeAuthenticatedRequest('GET', '/api/1.0/balances');
-      // Filter balances with total > 0
       return data.filter((balance: any) => parseFloat(balance.total || 0) > 0);
     } catch (error) {
       throw new Error(`Failed to fetch Revolut X balances: ${error}`);
@@ -256,55 +238,72 @@ export class RevolutXService {
   }
 
   /**
-   * Get trade history from historical orders
+   * Get trade history from historical orders with pagination support
+   * Fetches all pages automatically until no more data
    */
   async getTradeHistory(limit: number = 100, fromTimestamp?: number): Promise<any[]> {
     try {
-      // First test: try WITHOUT query params to verify basic auth works
-      console.log('[Revolut X] Testing basic request without query params...');
-      try {
-        await this.makeAuthenticatedRequest('GET', '/api/1.0/balances');
-        console.log('[Revolut X] Basic auth works!');
-      } catch (e) {
-        console.error('[Revolut X] Basic auth FAILED:', e);
-        return [];
-      }
+      const allTrades: any[] = [];
+      let cursor: string | null = null;
+      let pageCount = 0;
+      const maxPages = 50; // Safety limit
 
-      // Now try with query params
-      const queryParams: Record<string, any> = { limit };
-      
-      if (fromTimestamp) {
-        queryParams.start_date = fromTimestamp;
-        queryParams.end_date = Date.now();
-      }
-
-      console.log('[Revolut X] Attempting historical orders request...');
-      const response = await this.makeAuthenticatedRequest(
-        'GET',
-        '/api/1.0/orders/historical',
-        queryParams
-      );
-      
-      const orders = response.data || response || [];
-      console.log(`[Revolut X] Fetched ${orders.length} historical orders`);
-      
-      // Convert filled orders to trade format
-      const trades: any[] = [];
-      for (const order of orders) {
-        if (order.filled_quantity && parseFloat(order.filled_quantity) > 0) {
-          trades.push({
-            id: order.id,
-            symbol: order.symbol,
-            side: order.side,
-            quantity: order.filled_quantity,
-            price: order.average_price || order.limit_price || 0,
-            timestamp: order.updated_at || order.created_at,
-            status: order.status,
-          });
+      do {
+        pageCount++;
+        
+        const queryParams: Record<string, any> = { limit };
+        
+        if (fromTimestamp && !cursor) {
+          // Only use dates on first request
+          queryParams.start_date = fromTimestamp;
+          queryParams.end_date = Date.now();
         }
-      }
+        
+        if (cursor) {
+          queryParams.cursor = cursor;
+        }
+
+        console.log(`[Revolut X] Fetching page ${pageCount}${cursor ? ' (cursor: ' + cursor.substring(0, 20) + '...)' : ''}`);
+        
+        const response = await this.makeAuthenticatedRequest(
+          'GET',
+          '/api/1.0/orders/historical',
+          queryParams
+        );
+        
+        const orders = response.data || response || [];
+        const metadata = response.metadata || {};
+        
+        console.log(`[Revolut X] Page ${pageCount}: ${orders.length} orders, has next: ${!!metadata.next_cursor}`);
+        
+        // Convert filled orders to trades
+        for (const order of orders) {
+          if (order.filled_quantity && parseFloat(order.filled_quantity) > 0) {
+            allTrades.push({
+              id: order.id,
+              symbol: order.symbol,
+              side: order.side,
+              quantity: order.filled_quantity,
+              price: order.average_price || order.limit_price || 0,
+              timestamp: order.updated_at || order.created_at,
+              status: order.status,
+            });
+          }
+        }
+        
+        // Get next cursor
+        cursor = metadata.next_cursor || null;
+        
+        // Safety check
+        if (pageCount >= maxPages) {
+          console.warn(`[Revolut X] Reached max page limit (${maxPages}), stopping pagination`);
+          break;
+        }
+      } while (cursor);
       
-      return trades;
+      console.log(`[Revolut X] Total fetched: ${allTrades.length} trades from ${pageCount} page(s)`);
+      return allTrades;
+      
     } catch (error) {
       console.error('Failed to fetch Revolut X trade history:', error);
       return [];
