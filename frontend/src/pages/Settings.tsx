@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import apiService, { ApiKey } from '../services/api';
 
+type ExchangeType = 'binance' | 'revolutx';
 
 const Settings: React.FC = () => {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
@@ -9,6 +10,7 @@ const Settings: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [selectedExchange, setSelectedExchange] = useState<ExchangeType>('binance');
   const [formData, setFormData] = useState({
     apiKey: '',
     apiSecret: '',
@@ -43,10 +45,11 @@ const Settings: React.FC = () => {
       await apiService.addApiKey(
         formData.apiKey,
         formData.apiSecret,
+        selectedExchange,
         formData.label || undefined
       );
       
-      setSuccess('API key added successfully!');
+      setSuccess(`${selectedExchange === 'binance' ? 'Binance' : 'Revolut X'} API key added successfully!`);
       setFormData({ apiKey: '', apiSecret: '', label: '' });
       setShowAddForm(false);
       await loadApiKeys();
@@ -91,7 +94,7 @@ const Settings: React.FC = () => {
 
         <div className="settings-section">
           <div className="section-header">
-            <h2>Binance API Keys</h2>
+            <h2>Exchange API Keys</h2>
             <button
               onClick={() => setShowAddForm(!showAddForm)}
               className="btn btn-primary"
@@ -101,12 +104,27 @@ const Settings: React.FC = () => {
           </div>
 
           <p className="section-description">
-            Connect your Binance account to automatically import trades. Your API keys are encrypted and stored securely.
+            Connect your exchange accounts to automatically import trades. Your API keys are encrypted and stored securely.
           </p>
 
           {showAddForm && (
             <div className="api-key-form-card">
-              <h3>Add Binance API Key</h3>
+              <h3>Add Exchange API Key</h3>
+              
+              {/* Exchange selector */}
+              <div className="form-group">
+                <label htmlFor="exchange">Exchange *</label>
+                <select
+                  id="exchange"
+                  value={selectedExchange}
+                  onChange={(e) => setSelectedExchange(e.target.value as ExchangeType)}
+                  className="form-select"
+                >
+                  <option value="binance">Binance</option>
+                  <option value="revolutx">Revolut X</option>
+                </select>
+              </div>
+
               <form onSubmit={handleSubmit}>
                 <div className="form-group">
                   <label htmlFor="label">Label (Optional)</label>
@@ -115,42 +133,67 @@ const Settings: React.FC = () => {
                     id="label"
                     value={formData.label}
                     onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-                    placeholder="e.g., Main Account"
+                    placeholder={selectedExchange === 'binance' ? 'e.g., Main Account' : 'e.g., Tracking'}
                   />
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="apiKey">API Key *</label>
+                  <label htmlFor="apiKey">
+                    {selectedExchange === 'binance' ? 'API Key' : 'API Key (X-Revx-API-Key)'} *
+                  </label>
                   <input
                     type="text"
                     id="apiKey"
                     value={formData.apiKey}
                     onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
                     required
-                    placeholder="Your Binance API Key"
+                    placeholder={selectedExchange === 'binance' ? 'Your Binance API Key' : 'Your Revolut X API Key'}
                   />
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="apiSecret">API Secret *</label>
-                  <input
-                    type="password"
+                  <label htmlFor="apiSecret">
+                    {selectedExchange === 'binance' ? 'API Secret' : 'Private Key (Ed25519 hex)'} *
+                  </label>
+                  <textarea
                     id="apiSecret"
                     value={formData.apiSecret}
                     onChange={(e) => setFormData({ ...formData, apiSecret: e.target.value })}
                     required
-                    placeholder="Your Binance API Secret"
+                    placeholder={
+                      selectedExchange === 'binance'
+                        ? 'Your Binance API Secret'
+                        : 'Your Ed25519 private key in hex format (64 characters)'
+                    }
+                    rows={selectedExchange === 'revolutx' ? 3 : 1}
+                    style={{ fontFamily: 'monospace', fontSize: '0.9em' }}
                   />
                 </div>
 
-                <div className="help-text">
-                  <strong>⚠️ Important:</strong>
-                  <ul>
-                    <li>Enable only "Read" permission (spot account)</li>
-                    <li>Do NOT enable trading or withdrawal permissions</li>
-                    <li>Your keys are encrypted with AES-256-GCM</li>
-                  </ul>
-                </div>
+                {/* Help text based on exchange */}
+                {selectedExchange === 'binance' && (
+                  <div className="help-text">
+                    <strong>⚠️ Important:</strong>
+                    <ul>
+                      <li>Enable only "Read" permission (spot account)</li>
+                      <li>Do NOT enable trading or withdrawal permissions</li>
+                      <li>Your keys are encrypted with AES-256-GCM</li>
+                    </ul>
+                  </div>
+                )}
+
+                {selectedExchange === 'revolutx' && (
+                  <div className="help-text">
+                    <strong>⚠️ Important:</strong>
+                    <ul>
+                      <li>Generate Ed25519 keys with: <code>openssl genpkey -algorithm ed25519 -out private.pem</code></li>
+                      <li>Convert private key to hex format before pasting</li>
+                      <li>Enable only "Spot view" permission in Revolut X</li>
+                      <li>Do NOT enable trading or withdrawal permissions</li>
+                      <li>Your keys are encrypted with AES-256-GCM</li>
+                    </ul>
+                  </div>
+                )}
 
                 <button type="submit" className="btn btn-primary" disabled={submitting}>
                   {submitting ? 'Testing & Adding...' : 'Add API Key'}
@@ -162,7 +205,7 @@ const Settings: React.FC = () => {
           <div className="api-keys-list">
             {apiKeys.length === 0 ? (
               <div className="empty-state">
-                <p>No API keys configured. Add your first Binance API key to start importing trades automatically.</p>
+                <p>No API keys configured. Add your first exchange API key to start importing trades automatically.</p>
               </div>
             ) : (
               <div className="api-keys-grid">
@@ -183,7 +226,7 @@ const Settings: React.FC = () => {
                       </button>
                     </div>
                     <div className="api-key-details">
-                      <p><strong>Exchange:</strong> {key.exchange}</p>
+                      <p><strong>Exchange:</strong> {key.exchange === 'binance' ? 'Binance' : 'Revolut X'}</p>
                       <p><strong>Added:</strong> {new Date(key.createdAt).toLocaleDateString()}</p>
                     </div>
                   </div>
@@ -193,6 +236,7 @@ const Settings: React.FC = () => {
           </div>
         </div>
 
+        {/* Instructions for Binance */}
         <div className="settings-section">
           <h2>How to Get Binance API Keys</h2>
           <ol className="instructions-list">
@@ -204,6 +248,32 @@ const Settings: React.FC = () => {
             <li>Complete 2FA verification</li>
             <li>Copy your API Key and Secret</li>
             <li>Paste them here</li>
+          </ol>
+        </div>
+
+        {/* Instructions for Revolut X */}
+        <div className="settings-section">
+          <h2>How to Get Revolut X API Keys</h2>
+          <ol className="instructions-list">
+            <li>
+              Generate Ed25519 key pair locally:
+              <br />
+              <code>openssl genpkey -algorithm ed25519 -out revolutx-private.key</code>
+              <br />
+              <code>openssl pkey -in revolutx-private.key -pubout -out revolutx-public.key</code>
+            </li>
+            <li>Log in to <a href="https://revolut.com/business/crypto-exchange" target="_blank" rel="noopener noreferrer">Revolut X</a></li>
+            <li>Go to <strong>Settings → API</strong></li>
+            <li>Click <strong>Create API Key</strong></li>
+            <li>Paste your <strong>public key</strong> content</li>
+            <li>Enable only <strong>"Spot view"</strong> permission</li>
+            <li>Copy the generated API key</li>
+            <li>
+              Convert your private key to hex:
+              <br />
+              <code>cat revolutx-private.key | grep -v "BEGIN\|END" | base64 -d | xxd -p -c 64</code>
+            </li>
+            <li>Paste API key and private key (hex) here</li>
           </ol>
         </div>
       </div>
