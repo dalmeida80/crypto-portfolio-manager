@@ -71,7 +71,7 @@ const PortfolioDetail: React.FC = () => {
       const [portfolioData, holdingsData, tradesData] = await Promise.all([
         apiService.getPortfolio(id!),
         apiService.getPortfolioHoldings(id!),
-        apiService.getAllTrades(id!), // Changed from getTrades to getAllTrades
+        apiService.getAllTrades(id!),
       ]);
 
       setPortfolio(portfolioData);
@@ -125,7 +125,7 @@ const PortfolioDetail: React.FC = () => {
       const withdrawalsInfo = result.withdrawalsImported ? `Withdrawals found: ${result.withdrawalsImported} (informational)` : '';
       
       setSuccessMessage(
-        `✅ Import completed!\n` +
+        `\u2705 Import completed!\n` +
         `Trades imported: ${result.imported}\n` +
         depositsInfo +
         withdrawalsInfo
@@ -150,7 +150,7 @@ const PortfolioDetail: React.FC = () => {
       setSuccessMessage(null);
       await apiService.refreshPortfolio(id!);
       await fetchPortfolioData();
-      setSuccessMessage('✅ Prices refreshed successfully!');
+      setSuccessMessage('\u2705 Prices refreshed successfully!');
       
       // Clear message after 3 seconds
       setTimeout(() => setSuccessMessage(null), 3000);
@@ -171,6 +171,12 @@ const PortfolioDetail: React.FC = () => {
     return <div className="portfolio-detail">Portfolio not found</div>;
   }
 
+  // Detect currency based on holdings symbols
+  // If most symbols end with EUR, use € symbol, otherwise $
+  const isEurPortfolio = holdings.length > 0 && 
+    holdings.filter(h => h.symbol.endsWith('EUR')).length > holdings.length / 2;
+  const currencySymbol = isEurPortfolio ? '\u20ac' : '$';
+
   // Safely calculate profit/loss percentage
   const totalInvested = portfolio.totalInvested ?? 0;
   const profitLoss = portfolio.profitLoss ?? 0;
@@ -181,7 +187,7 @@ const PortfolioDetail: React.FC = () => {
   return (
     <div className="portfolio-detail">
       <button onClick={() => navigate('/dashboard')} className="btn-back">
-        ← Back to Dashboard
+        \u2190 Back to Dashboard
       </button>
 
       <div className="page-header">
@@ -191,10 +197,10 @@ const PortfolioDetail: React.FC = () => {
         </div>
         <div className="header-actions">
           <button onClick={() => setShowImportForm(!showImportForm)} className="btn-success">
-            📥 Import Trades
+            \ud83d\udce5 Import Trades
           </button>
           <button onClick={handleRefreshPrices} className="btn-secondary">
-            🔄 Refresh Prices
+            \ud83d\udd04 Refresh Prices
           </button>
           <button onClick={() => setShowTradeForm(!showTradeForm)} className="btn-primary">
             + Add Trade
@@ -208,7 +214,7 @@ const PortfolioDetail: React.FC = () => {
 
       {showImportForm && (
         <div className="trade-form-card import-form">
-          <h2>📥 Import Trades from Exchange</h2>
+          <h2>\ud83d\udce5 Import Trades from Exchange</h2>
           <p className="form-description">
             Import your trading history from all connected exchanges (Binance, Revolut X, etc.)
           </p>
@@ -229,18 +235,18 @@ const PortfolioDetail: React.FC = () => {
             </div>
 
             <div className="import-info">
-              <h3>ℹ️ What will be imported:</h3>
+              <h3>\u2139\ufe0f What will be imported:</h3>
               <ul>
-                <li>✅ Spot trades (BUY/SELL) from all active API keys</li>
-                <li>📊 Deposits detected (Binance only, informational)</li>
-                <li>📊 Withdrawals detected (Binance only, informational)</li>
-                <li>⚠️ Rate limit: ~1200 requests/minute (Binance)</li>
+                <li>\u2705 Spot trades (BUY/SELL) from all active API keys</li>
+                <li>\ud83d\udcca Deposits detected (Binance only, informational)</li>
+                <li>\ud83d\udcca Withdrawals detected (Binance only, informational)</li>
+                <li>\u26a0\ufe0f Rate limit: ~1200 requests/minute (Binance)</li>
               </ul>
             </div>
 
             <div className="form-actions">
               <button type="submit" className="btn-success" disabled={importing}>
-                {importing ? '⏳ Importing...' : '🚀 Start Import'}
+                {importing ? '\u23f3 Importing...' : '\ud83d\ude80 Start Import'}
               </button>
               <button
                 type="button"
@@ -351,16 +357,16 @@ const PortfolioDetail: React.FC = () => {
       <div className="stats-grid">
         <div className="stat-card">
           <h3>Total Invested</h3>
-          <p className="stat-value">${formatNumber(portfolio.totalInvested)}</p>
+          <p className="stat-value">{currencySymbol}{formatNumber(portfolio.totalInvested)}</p>
         </div>
         <div className="stat-card">
           <h3>Current Value</h3>
-          <p className="stat-value">${formatNumber(portfolio.currentValue)}</p>
+          <p className="stat-value">{currencySymbol}{formatNumber(portfolio.currentValue)}</p>
         </div>
         <div className="stat-card">
           <h3>Profit/Loss</h3>
           <p className={`stat-value ${profitLoss >= 0 ? 'positive' : 'negative'}`}>
-            ${formatNumber(profitLoss)}
+            {currencySymbol}{formatNumber(profitLoss)}
             <span className="percentage">
               ({profitLossPercentage >= 0 ? '+' : ''}{formatNumber(profitLossPercentage)}%)
             </span>
@@ -397,12 +403,12 @@ const PortfolioDetail: React.FC = () => {
                   <tr key={holding.symbol}>
                     <td><strong>{holding.symbol}</strong></td>
                     <td>{formatNumber(holding.quantity, 8)}</td>
-                    <td>${formatPrice(holding.averagePrice)}</td>
-                    <td className="current-price">${formatPrice(holding.currentPrice)}</td>
-                    <td>${formatNumber(holding.totalInvested)}</td>
-                    <td>${formatNumber(holding.currentValue)}</td>
+                    <td>{currencySymbol}{formatPrice(holding.averagePrice)}</td>
+                    <td className="current-price">{currencySymbol}{formatPrice(holding.currentPrice)}</td>
+                    <td>{currencySymbol}{formatNumber(holding.totalInvested)}</td>
+                    <td>{currencySymbol}{formatNumber(holding.currentValue)}</td>
                     <td className={(holding.profitLoss ?? 0) >= 0 ? 'positive' : 'negative'}>
-                      ${formatNumber(holding.profitLoss)}
+                      {currencySymbol}{formatNumber(holding.profitLoss)}
                     </td>
                     <td className={(holding.profitLossPercentage ?? 0) >= 0 ? 'positive' : 'negative'}>
                       {(holding.profitLossPercentage ?? 0) >= 0 ? '+' : ''}{formatNumber(holding.profitLossPercentage)}%
@@ -447,9 +453,9 @@ const PortfolioDetail: React.FC = () => {
                       {trade.type}
                     </td>
                     <td>{formatNumber(trade.quantity, 8)}</td>
-                    <td>${formatPrice(trade.price)}</td>
-                    <td>${formatNumber(trade.fee, 4)}</td>
-                    <td>${formatNumber(trade.total)}</td>
+                    <td>{currencySymbol}{formatPrice(trade.price)}</td>
+                    <td>{currencySymbol}{formatNumber(trade.fee, 4)}</td>
+                    <td>{currencySymbol}{formatNumber(trade.total)}</td>
                     <td>
                       {trade.source && (
                         <span className="badge-info">{trade.source}</span>
