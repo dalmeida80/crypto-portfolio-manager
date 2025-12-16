@@ -13,6 +13,23 @@ interface HoldingPosition {
   realizedProfitLoss: number;
 }
 
+/**
+ * PortfolioUpdateService - Manages portfolio value calculations and updates
+ * 
+ * Calculation Logic:
+ * - Uses TradeTimelineService for accurate P&L tracking
+ * - Considers all trades (Binance, Revolut X, manual) and transfers
+ * - Fees are included in cost basis (BUY) and reduce proceeds (SELL)
+ * - Supports multiple exchanges and sources in same portfolio
+ * 
+ * Key Metrics:
+ * - Total Invested: Sum of all buy costs including fees
+ * - Current Value: Sum of (quantity * current_price) for all holdings
+ * - Unrealized P&L: Current Value - Total Invested (open positions)
+ * - Realized P&L: Profit/loss from closed positions
+ * - Total P&L: Unrealized + Realized
+ * - Total Fees: Sum of all trading fees (tracked separately)
+ */
 export class PortfolioUpdateService {
   private priceService: PriceService;
   private timelineService: TradeTimelineService;
@@ -108,6 +125,7 @@ export class PortfolioUpdateService {
 
   /**
    * Calculate total fees from all trades
+   * Returns total fees in quote currency (should be converted to base currency if needed)
    */
   async getTotalFees(portfolioId: string): Promise<number> {
     const portfolioRepo = AppDataSource.getRepository(Portfolio);
@@ -191,13 +209,16 @@ export class PortfolioUpdateService {
       if (currentPrice) {
         currentValue += holding.quantity * currentPrice;
       } else {
-        console.warn(`No price found for ${symbol}, using average price`);
+        console.warn(`[Portfolio Update] No price found for ${symbol}, using average price`);
         currentValue += holding.quantity * holding.averagePrice;
       }
     }
 
     const unrealizedPL = currentValue - totalInvested;
     const profitLoss = unrealizedPL + totalRealizedPL;
+
+    // Calculate total fees paid
+    const totalFees = portfolio.trades.reduce((sum, trade) => sum + (trade.fee || 0), 0);
 
     // Update portfolio with realized + unrealized P/L
     portfolio.totalInvested = totalInvested;
@@ -206,12 +227,13 @@ export class PortfolioUpdateService {
 
     await portfolioRepo.save(portfolio);
 
-    console.log(`Updated portfolio ${portfolio.name}:`);
+    console.log(`[Portfolio Update] Updated portfolio ${portfolio.name}:`);
     console.log(`  Invested: ${totalInvested.toFixed(2)}`);
     console.log(`  Current: ${currentValue.toFixed(2)}`);
     console.log(`  Unrealized P/L: ${unrealizedPL.toFixed(2)}`);
     console.log(`  Realized P/L: ${totalRealizedPL.toFixed(2)}`);
     console.log(`  Total P/L: ${profitLoss.toFixed(2)}`);
+    console.log(`  Total Fees: ${totalFees.toFixed(2)}`);
 
     // Detect and save closed positions for each asset
     const assetMap = new Map<string, { trades: Trade[]; transfers: Transfer[] }>();
@@ -274,7 +296,7 @@ export class PortfolioUpdateService {
         const updated = await this.updatePortfolio(portfolio.id);
         updatedPortfolios.push(updated);
       } catch (error) {
-        console.error(`Failed to update portfolio ${portfolio.id}:`, error);
+        console.error(`[Portfolio Update] Failed to update portfolio ${portfolio.id}:`, error);
       }
     }
 
@@ -295,11 +317,11 @@ export class PortfolioUpdateService {
         await this.updatePortfolio(portfolio.id);
         updated++;
       } catch (error) {
-        console.error(`Failed to update portfolio ${portfolio.id}:`, error);
+        console.error(`[Portfolio Update] Failed to update portfolio ${portfolio.id}:`, error);
       }
     }
 
-    console.log(`Updated ${updated}/${portfolios.length} portfolios`);
+    console.log(`[Portfolio Update] Updated ${updated}/${portfolios.length} portfolios`);
     return updated;
   }
 
