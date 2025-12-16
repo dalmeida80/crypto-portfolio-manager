@@ -17,6 +17,12 @@ import { ExchangeApiKey } from '../entities/ExchangeApiKey';
  * - We calculate an estimated fee of 0.09% (taker) for all trades
  * - Fee is always in the quote currency (EUR for XXX/EUR pairs)
  * 
+ * Deposits & Withdrawals:
+ * - As of December 2024, Revolut X API does NOT expose deposit/withdrawal endpoints
+ * - Only trading operations (orders, fills, balances) are available via API
+ * - Deposits/withdrawals must be tracked manually using the Transfer entity
+ * - Users can add manual transfers in the UI (Add Transfer button)
+ * 
  * Documentation: https://developer.revolut.com/docs/x-api/revolut-x-crypto-exchange-rest-api
  */
 export class RevolutXService {
