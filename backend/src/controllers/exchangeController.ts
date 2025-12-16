@@ -145,47 +145,8 @@ export const getBalances = async (req: AuthRequest, res: Response): Promise<void
 };
 
 /**
- * Import trades from exchange for a portfolio
- */
-export const importTrades = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.user!.userId;
-    const { portfolioId } = req.params;
-    const { apiKeyId, startDate } = req.body;
-
-    let parsedStartDate: Date | undefined;
-    if (startDate) {
-      parsedStartDate = new Date(startDate);
-      if (isNaN(parsedStartDate.getTime())) {
-        res.status(400).json({ error: 'Invalid start date format' });
-        return;
-      }
-    }
-
-    const result = await tradeImportService.importTrades(
-      portfolioId,
-      apiKeyId,
-      userId,
-      parsedStartDate
-    );
-
-    if (!result.success) {
-      res.status(400).json(result);
-      return;
-    }
-
-    res.json(result);
-  } catch (error: any) {
-    console.error('Import trades error:', error);
-    res.status(500).json({ 
-      error: 'Failed to import trades',
-      message: error.message 
-    });
-  }
-};
-
-/**
- * Import trades from all API keys for a portfolio
+ * Import trades from all matching API keys for a portfolio
+ * Filtered by portfolio.exchange if set
  */
 export const importAllTrades = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
