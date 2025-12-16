@@ -71,7 +71,7 @@ const PortfolioDetail: React.FC = () => {
       const [portfolioData, holdingsData, tradesData] = await Promise.all([
         apiService.getPortfolio(id!),
         apiService.getPortfolioHoldings(id!),
-        apiService.getTrades(id!),
+        apiService.getAllTrades(id!), // Changed from getTrades to getAllTrades
       ]);
 
       setPortfolio(portfolioData);
