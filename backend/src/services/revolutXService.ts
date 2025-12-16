@@ -290,35 +290,35 @@ export class RevolutXService {
 
   /**
    * Get trade history with automatic chunking to bypass 7-day limit
-   * Splits requests into 7-day windows and fetches all historical data
+   * Fetches from NEWEST to OLDEST (reverse chronological) to find recent trades first
    */
   async getTradeHistory(limit: number = 100, fromTimestamp?: number): Promise<any[]> {
     try {
       const allTrades: any[] = [];
       const now = Date.now();
       
-      // Default to 2 years ago if no start date provided (Revolut X launched mid-2024)
-      // This ensures we capture all possible history
+      // Default to 2 years ago if no start date provided
       const startTimestamp = fromTimestamp || (now - (730 * 24 * 60 * 60 * 1000)); // 2 years
       
       // Calculate 6-day chunks (safety margin from 7-day API limit)
       const CHUNK_SIZE_MS = 6 * 24 * 60 * 60 * 1000; // 6 days in milliseconds
       const chunks: Array<{ start: number; end: number }> = [];
       
-      let currentStart = startTimestamp;
-      while (currentStart < now) {
-        const currentEnd = Math.min(currentStart + CHUNK_SIZE_MS, now);
+      // Build chunks in REVERSE (newest first)
+      let currentEnd = now;
+      while (currentEnd > startTimestamp) {
+        const currentStart = Math.max(currentEnd - CHUNK_SIZE_MS, startTimestamp);
         chunks.push({ start: currentStart, end: currentEnd });
-        currentStart = currentEnd + 1; // Move to next chunk
+        currentEnd = currentStart - 1; // Move to previous chunk
       }
       
-      console.log(`[Revolut X] Fetching history in ${chunks.length} chunk(s) of ~6 days each`);
+      console.log(`[Revolut X] Fetching history in ${chunks.length} chunk(s) of ~6 days each (newest to oldest)`);
       console.log(`[Revolut X] Date range: ${new Date(startTimestamp).toISOString()} to ${new Date(now).toISOString()}`);
       
       let emptyChunksInARow = 0;
-      const MAX_EMPTY_CHUNKS = 5; // Stop if 5 consecutive empty chunks (30 days of no data)
+      const MAX_EMPTY_CHUNKS = 10; // Stop after 60 days of no data
       
-      // Fetch each chunk
+      // Fetch each chunk (starting from most recent)
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
         const chunkStart = new Date(chunk.start).toISOString().split('T')[0];
@@ -352,9 +352,9 @@ export class RevolutXService {
             }
           }
           
-          // Stop if too many consecutive empty chunks
+          // Stop if too many consecutive empty chunks (60 days of no activity)
           if (emptyChunksInARow >= MAX_EMPTY_CHUNKS) {
-            console.log(`[Revolut X] ${MAX_EMPTY_CHUNKS} consecutive empty chunks, stopping early at chunk ${i + 1}`);
+            console.log(`[Revolut X] ${MAX_EMPTY_CHUNKS} consecutive empty chunks (60 days), stopping early at chunk ${i + 1}`);
             break;
           }
           
