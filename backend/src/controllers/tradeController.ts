@@ -46,10 +46,24 @@ export const addTrade = async (req: AuthRequest, res: Response): Promise<void> =
   }
 };
 
+/**
+ * List trades with pagination support
+ * Query params:
+ * - page: page number (default 1, min 1)
+ * - pageSize: items per page (default 50, min 1, max 100)
+ * - source: filter by source (optional: 'binance', 'revolutx', 'manual')
+ * - symbol: filter by symbol (optional)
+ */
 export const listTrades = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.userId;
     const { portfolioId } = req.params;
+
+    // Parse pagination params
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string) || 50));
+    const source = req.query.source as string | undefined;
+    const symbol = req.query.symbol as string | undefined;
 
     const portfolioRepo = AppDataSource.getRepository(Portfolio);
     const portfolio = await portfolioRepo.findOne({
@@ -62,12 +76,43 @@ export const listTrades = async (req: AuthRequest, res: Response): Promise<void>
     }
 
     const tradeRepo = AppDataSource.getRepository(Trade);
+    
+    // Build where clause with filters
+    const where: any = { portfolioId };
+    if (source) {
+      where.source = source;
+    }
+    if (symbol) {
+      where.symbol = symbol.toUpperCase();
+    }
+
+    // Get total count for pagination metadata
+    const totalCount = await tradeRepo.count({ where });
+
+    // Get paginated trades
     const trades = await tradeRepo.find({
-      where: { portfolioId },
+      where,
       order: { executedAt: 'DESC' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     });
 
-    res.json(trades);
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalCount / pageSize);
+    const hasNextPage = page < totalPages;
+    const hasPreviousPage = page > 1;
+
+    res.json({
+      data: trades,
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages,
+        hasNextPage,
+        hasPreviousPage,
+      },
+    });
   } catch (error) {
     console.error('List trades error:', error);
     res.status(500).json({ error: 'Internal server error' });
