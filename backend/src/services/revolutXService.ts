@@ -133,6 +133,7 @@ export class RevolutXService {
     body: string = ''
   ): string {
     const message = timestamp + method.toUpperCase() + path + queryString + body;
+    console.log('[Revolut X Debug] Signature message:', message);
     const messageBytes = new TextEncoder().encode(message);
     const signature = nacl.sign.detached(messageBytes, this.privateKey);
     return this.uint8ArrayToBase64(signature);
@@ -140,16 +141,20 @@ export class RevolutXService {
 
   /**
    * Build query string from params object
+   * Query params are sorted alphabetically by key for consistent signature
    * @param params Query parameters object
-   * @returns Query string without '?' prefix (e.g., "limit=10&start_date=123")
+   * @returns Query string without '?' prefix (e.g., "end_date=123&limit=10&start_date=100")
    */
   private buildQueryString(params?: Record<string, any>): string {
     if (!params || Object.keys(params).length === 0) {
       return '';
     }
     
-    return Object.entries(params)
-      .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    // Sort keys alphabetically for consistent signature
+    const sortedKeys = Object.keys(params).sort();
+    
+    return sortedKeys
+      .map((key) => `${key}=${encodeURIComponent(params[key])}`)
       .join('&');
   }
 
@@ -163,6 +168,14 @@ export class RevolutXService {
     const queryString = this.buildQueryString(queryParams);
     const body = data ? JSON.stringify(data) : '';
     const signature = this.generateSignature(timestamp, method, path, queryString, body);
+
+    console.log('[Revolut X Debug] Request:', {
+      method,
+      path,
+      queryString,
+      timestamp,
+      hasBody: !!body,
+    });
 
     const headers = {
       'X-Revx-API-Key': this.apiKey,
@@ -241,6 +254,8 @@ export class RevolutXService {
       
       // Extract orders from response
       const orders = response.data || response || [];
+      
+      console.log(`[Revolut X] Fetched ${orders.length} historical orders`);
       
       // Convert orders to trade format
       const trades: any[] = [];
