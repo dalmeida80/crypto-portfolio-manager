@@ -117,6 +117,37 @@ export class RevolutXService {
   }
 
   /**
+   * Parse timestamp to Date object
+   * Handles Unix epoch milliseconds, ISO strings, and other formats
+   */
+  private parseTimestamp(value: any): Date {
+    if (!value) {
+      return new Date();
+    }
+
+    // If already a Date
+    if (value instanceof Date) {
+      return value;
+    }
+
+    // If Unix timestamp (number or string number)
+    if (typeof value === 'number' || /^\d+$/.test(String(value))) {
+      const timestamp = Number(value);
+      return new Date(timestamp);
+    }
+
+    // Try parsing as ISO string
+    const parsed = new Date(value);
+    if (!isNaN(parsed.getTime())) {
+      return parsed;
+    }
+
+    // Fallback to current time
+    console.warn(`[Revolut X] Could not parse timestamp: ${value}, using current time`);
+    return new Date();
+  }
+
+  /**
    * Generate Ed25519 signature according to Revolut X spec
    * Format: timestamp + METHOD + path + queryString + body
    */
@@ -283,9 +314,9 @@ export class RevolutXService {
   convertToInternalFormat(trade: any): any {
     return {
       externalId: trade.id?.toString() || '',
-      timestamp: new Date(trade.timestamp || trade.updated_at || trade.created_at),
-      symbol: this.normalizeSymbol(trade.symbol),
-      side: (trade.side || '').toLowerCase(),
+      timestamp: this.parseTimestamp(trade.timestamp || trade.updated_at || trade.created_at),
+      symbol: this.normalizeSymbol(trade.symbol || ''),
+      side: (trade.side || 'buy').toLowerCase(),
       quantity: parseFloat(trade.quantity || trade.filled_quantity || 0),
       price: parseFloat(trade.price || trade.average_price || 0),
       fee: parseFloat(trade.fee || 0),
@@ -295,6 +326,7 @@ export class RevolutXService {
   }
 
   private normalizeSymbol(symbol: string): string {
+    if (!symbol) return '';
     return symbol.replace('-', '').replace('/', '').toUpperCase();
   }
 }
