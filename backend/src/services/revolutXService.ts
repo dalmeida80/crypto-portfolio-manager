@@ -330,6 +330,11 @@ export class RevolutXService {
           const orders = await this.fetchHistoricalOrdersChunk(chunk.start, chunk.end, limit);
           console.log(`[Revolut X] Chunk ${i + 1}: fetched ${orders.length} orders`);
           
+          // Log first order structure for debugging
+          if (i === 0 && orders.length > 0) {
+            console.log('[Revolut X] Sample order structure:', JSON.stringify(orders[0], null, 2));
+          }
+          
           // Track empty chunks
           if (orders.length === 0) {
             emptyChunksInARow++;
@@ -378,7 +383,10 @@ export class RevolutXService {
   }
 
   convertToInternalFormat(trade: any): any {
-    return {
+    // Log the trade structure to diagnose data issues
+    console.log('[Revolut X] Converting trade:', JSON.stringify(trade, null, 2));
+    
+    const converted = {
       externalId: trade.id?.toString() || '',
       timestamp: this.parseTimestamp(trade.timestamp || trade.updated_at || trade.created_at),
       symbol: this.normalizeSymbol(trade.symbol || ''),
@@ -389,6 +397,9 @@ export class RevolutXService {
       feeCurrency: trade.fee_currency || trade.feeCurrency || 'USD',
       type: 'trade',
     };
+    
+    console.log('[Revolut X] Converted to:', converted);
+    return converted;
   }
 
   private normalizeSymbol(symbol: string): string {
