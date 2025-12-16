@@ -153,7 +153,7 @@ const Settings: React.FC = () => {
 
                 <div className="form-group">
                   <label htmlFor="apiSecret">
-                    {selectedExchange === 'binance' ? 'API Secret' : 'Private Key (Ed25519 hex)'} *
+                    {selectedExchange === 'binance' ? 'API Secret' : 'Private Key (PEM format)'} *
                   </label>
                   <textarea
                     id="apiSecret"
@@ -163,9 +163,9 @@ const Settings: React.FC = () => {
                     placeholder={
                       selectedExchange === 'binance'
                         ? 'Your Binance API Secret'
-                        : 'Your Ed25519 private key in hex format (64 characters)'
+                        : '-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----'
                     }
-                    rows={selectedExchange === 'revolutx' ? 3 : 1}
+                    rows={selectedExchange === 'revolutx' ? 5 : 1}
                     style={{ fontFamily: 'monospace', fontSize: '0.9em' }}
                   />
                 </div>
@@ -186,8 +186,8 @@ const Settings: React.FC = () => {
                   <div className="help-text">
                     <strong>⚠️ Important:</strong>
                     <ul>
-                      <li>Generate Ed25519 keys with: <code>openssl genpkey -algorithm ed25519 -out private.pem</code></li>
-                      <li>Convert private key to hex format before pasting</li>
+                      <li>Paste the <strong>entire private key file</strong> content (PEM format)</li>
+                      <li>Should start with <code>-----BEGIN PRIVATE KEY-----</code></li>
                       <li>Enable only "Spot view" permission in Revolut X</li>
                       <li>Do NOT enable trading or withdrawal permissions</li>
                       <li>Your keys are encrypted with AES-256-GCM</li>
@@ -257,23 +257,24 @@ const Settings: React.FC = () => {
           <ol className="instructions-list">
             <li>
               Generate Ed25519 key pair locally:
-              <br />
-              <code>openssl genpkey -algorithm ed25519 -out revolutx-private.key</code>
-              <br />
-              <code>openssl pkey -in revolutx-private.key -pubout -out revolutx-public.key</code>
+              <pre style={{ background: '#f5f5f5', padding: '10px', borderRadius: '4px', marginTop: '8px' }}>
+                openssl genpkey -algorithm ed25519 -out revolutx-private.key<br/>
+                openssl pkey -in revolutx-private.key -pubout -out revolutx-public.key
+              </pre>
             </li>
             <li>Log in to <a href="https://revolut.com/business/crypto-exchange" target="_blank" rel="noopener noreferrer">Revolut X</a></li>
             <li>Go to <strong>Settings → API</strong></li>
             <li>Click <strong>Create API Key</strong></li>
-            <li>Paste your <strong>public key</strong> content</li>
+            <li>Paste your <strong>public key</strong> content (from revolutx-public.key)</li>
             <li>Enable only <strong>"Spot view"</strong> permission</li>
             <li>Copy the generated API key</li>
             <li>
-              Convert your private key to hex:
-              <br />
-              <code>cat revolutx-private.key | grep -v "BEGIN\|END" | base64 -d | xxd -p -c 64</code>
+              Copy the <strong>entire content</strong> of your private key file:
+              <pre style={{ background: '#f5f5f5', padding: '10px', borderRadius: '4px', marginTop: '8px' }}>
+                cat revolutx-private.key
+              </pre>
             </li>
-            <li>Paste API key and private key (hex) here</li>
+            <li>Paste API key and the full private key (PEM format) here</li>
           </ol>
         </div>
       </div>
