@@ -47,7 +47,9 @@ export class ClosedPosition {
   @Column('decimal', { precision: 20, scale: 8 })
   realizedProfitLoss: number; // totalReceived - totalInvested
 
-  @Column('decimal', { precision: 10, scale: 2 })
+  // Changed from NUMERIC(10,2) to NUMERIC(20,2) to handle extreme percentages
+  // that occur when selling deposited assets with minimal/no cost basis
+  @Column('decimal', { precision: 20, scale: 2 })
   realizedProfitLossPercentage: number;
 
   @Column({ type: 'timestamp' })
