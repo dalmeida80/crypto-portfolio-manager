@@ -53,6 +53,7 @@ export interface ImportResult {
 export interface ImportStatus {
   totalTrades: number;
   binanceTrades: number;
+  revolutxTrades: number;
   manualTrades: number;
   lastImportDate: string | null;
   oldestTrade: string | null;
@@ -237,9 +238,19 @@ class ApiService {
     return data;
   }
 
-  // Binance API Key methods
-  async addApiKey(apiKey: string, apiSecret: string, label?: string): Promise<{ message: string; apiKey: ApiKey }> {
-    const { data } = await this.api.post('/exchange/api-keys', { apiKey, apiSecret, label });
+  // Exchange API Key methods (updated to support multiple exchanges)
+  async addApiKey(
+    apiKey: string,
+    apiSecret: string,
+    exchange: 'binance' | 'revolutx' = 'binance',
+    label?: string
+  ): Promise<{ message: string; apiKey: ApiKey }> {
+    const { data } = await this.api.post('/exchange/api-keys', {
+      apiKey,
+      apiSecret,
+      exchange,
+      label
+    });
     return data;
   }
 
