@@ -3,7 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import apiService, { BalanceResponse, SimpleHolding } from '../services/api';
 import { Portfolio, Trade, Holding } from '../types';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
+// Color palette for pie chart
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82ca9d', '#ffc658', '#ff7c7c'];
 
 // Helper function to safely format numbers
 const formatNumber = (value: number | null | undefined, decimals: number = 2): string => {
@@ -196,6 +199,13 @@ const PortfolioDetail: React.FC = () => {
 
   // SIMPLE BALANCE VIEW (for Revolut X)
   if (isSimpleBalanceView && simpleBalances) {
+    // Prepare data for pie chart
+    const chartData = simpleBalances.holdings.map((holding, index) => ({
+      name: holding.asset,
+      value: holding.currentValue,
+      percentage: ((holding.currentValue / simpleBalances.totalValue) * 100).toFixed(2)
+    }));
+
     return (
       <div className="portfolio-detail">
         <button onClick={() => navigate('/dashboard')} className="btn-back">
@@ -237,6 +247,31 @@ const PortfolioDetail: React.FC = () => {
             </p>
             <p className="stat-hint">{new Date(simpleBalances.updatedAt).toLocaleDateString()}</p>
           </div>
+        </div>
+
+        {/* Pie Chart Section */}
+        <div className="chart-section" style={{ marginBottom: '2rem', background: 'white', padding: '2rem', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+          <h2 style={{ marginBottom: '1rem' }}>Portfolio Distribution</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={chartData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={(entry) => `${entry.name} (${entry.percentage}%)`}
+                outerRadius={100}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {chartData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value: number) => `${currencySymbol}${formatNumber(value)}`} />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
         </div>
 
         <div className="holdings-section">
@@ -282,7 +317,7 @@ const PortfolioDetail: React.FC = () => {
     );
   }
 
-  // FULL VIEW (for other portfolios with P/L tracking)
+  // FULL VIEW (for other portfolios with P/L tracking) - continues as before...
   const profitLoss = portfolio.profitLoss ?? 0;
   const totalInvested = portfolio.totalInvested ?? 0;
   const profitLossPercentage = totalInvested > 0
