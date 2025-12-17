@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { AppDataSource } from '../data-source';
+import { AppDataSource } from '../index';
 import { Portfolio } from '../entities/Portfolio';
 
 interface AuthRequest extends Request {
@@ -35,7 +35,7 @@ export const placeLimitOrder = async (req: AuthRequest, res: Response) => {
     const portfolioRepository = AppDataSource.getRepository(Portfolio);
     const portfolio = await portfolioRepository.findOne({
       where: { 
-        id: parseInt(portfolioId), 
+        id: portfolioId, 
         userId: req.user!.userId 
       }
     });
