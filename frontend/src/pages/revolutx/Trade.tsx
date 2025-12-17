@@ -26,7 +26,7 @@ const RevolutXTrade: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'create' | 'orders'>('create');
   const [formData, setFormData] = useState<TradeFormData>({
-    pair: 'DOGE-EUR',
+    pair: 'BTC-EUR',
     side: 'buy',
     amount: '',
     price: ''
@@ -38,6 +38,31 @@ const RevolutXTrade: React.FC = () => {
   
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [availablePairs, setAvailablePairs] = useState<string[]>([]);
+
+  // Comprehensive list of popular crypto pairs on Revolut X
+  const DEFAULT_PAIRS = [
+    'BTC-EUR',   // Bitcoin
+    'ETH-EUR',   // Ethereum
+    'DOGE-EUR',  // Dogecoin
+    'XRP-EUR',   // Ripple
+    'SOL-EUR',   // Solana
+    'ADA-EUR',   // Cardano
+    'AVAX-EUR',  // Avalanche
+    'DOT-EUR',   // Polkadot
+    'MATIC-EUR', // Polygon
+    'LINK-EUR',  // Chainlink
+    'UNI-EUR',   // Uniswap
+    'LTC-EUR',   // Litecoin
+    'ATOM-EUR',  // Cosmos
+    'NEAR-EUR',  // Near
+    'ALGO-EUR',  // Algorand
+    'PEPE-EUR',  // Pepe
+    'SHIB-EUR',  // Shiba Inu
+    'ONDO-EUR',  // Ondo
+    'APT-EUR',   // Aptos
+    'ARB-EUR',   // Arbitrum
+  ].sort();
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -45,6 +70,37 @@ const RevolutXTrade: React.FC = () => {
       navigate('/login');
     }
   }, [isAuthenticated, navigate]);
+
+  // Fetch portfolio holdings to get available pairs
+  useEffect(() => {
+    const fetchHoldings = async () => {
+      try {
+        const response = await fetch(`/api/portfolios/${portfolioId}/balances`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('accessToken')}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          // Extract pairs from holdings
+          const holdingPairs = data.holdings?.map((h: any) => `${h.asset}-EUR`) || [];
+          
+          // Combine with default pairs and remove duplicates
+          const allPairs = [...new Set([...DEFAULT_PAIRS, ...holdingPairs])].sort();
+          setAvailablePairs(allPairs);
+        } else {
+          // Fallback to default pairs if fetch fails
+          setAvailablePairs(DEFAULT_PAIRS);
+        }
+      } catch (err) {
+        console.error('Failed to fetch holdings:', err);
+        setAvailablePairs(DEFAULT_PAIRS);
+      }
+    };
+
+    fetchHoldings();
+  }, [portfolioId]);
 
   // Fetch open orders
   const fetchOrders = async () => {
@@ -143,19 +199,27 @@ const RevolutXTrade: React.FC = () => {
     }
   };
 
-  const pairs = ['DOGE-EUR', 'BTC-EUR', 'PEPE-EUR', 'XRP-EUR', 'SOL-EUR', 'ONDO-EUR'];
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 mb-6 shadow-2xl">
-          <h1 className="text-3xl font-bold text-white mb-2">
-            🚀 Revolut X Trading
-          </h1>
-          <p className="text-purple-200">
-            Portfolio ID: <span className="font-mono text-yellow-300">{portfolioId}</span>
-          </p>
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-white mb-2">
+                🚀 Revolut X Trading
+              </h1>
+              <p className="text-purple-200">
+                Portfolio ID: <span className="font-mono text-yellow-300">{portfolioId}</span>
+              </p>
+            </div>
+            <button
+              onClick={() => navigate(`/portfolios/${portfolioId}`)}
+              className="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-all"
+            >
+              ← Voltar
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -189,13 +253,14 @@ const RevolutXTrade: React.FC = () => {
             <div className="mb-6">
               <label className="block text-purple-200 font-semibold mb-2">
                 Par de Negociação
+                <span className="ml-2 text-sm text-purple-300">({availablePairs.length} pares disponíveis)</span>
               </label>
               <select
                 value={formData.pair}
                 onChange={(e) => setFormData({ ...formData, pair: e.target.value })}
                 className="w-full bg-slate-800 text-white rounded-lg px-4 py-3 border border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
               >
-                {pairs.map(pair => (
+                {availablePairs.map(pair => (
                   <option key={pair} value={pair}>{pair}</option>
                 ))}
               </select>
@@ -314,6 +379,9 @@ const RevolutXTrade: React.FC = () => {
             ) : orders.length === 0 ? (
               <div className="text-center text-purple-200 py-8">
                 <p>📭 Não há ordens abertas</p>
+                <p className="text-sm mt-2 text-purple-300">
+                  (Nota: Ordens reais da Revolut X aparecerão aqui quando a API estiver conectada)
+                </p>
               </div>
             ) : (
               <div className="space-y-4">
