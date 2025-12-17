@@ -24,6 +24,7 @@ import {
   getPortfolioBalances,
 } from '../controllers/portfolioBalanceController';
 import {
+  getTicker,
   placeLimitOrder,
   listOrders,
   cancelOrder,
@@ -56,6 +57,9 @@ router.get('/:portfolioId/transfers', authenticate, getPortfolioTransfers);
 router.post('/:portfolioId/trades', authenticate, addTrade);
 router.get('/:portfolioId/trades', authenticate, listTrades);
 router.delete('/:portfolioId/trades/:tradeId', authenticate, deleteTrade);
+
+// Revolut X ticker (real-time prices)
+router.get('/:portfolioId/ticker/:symbol', authenticate, getTicker);
 
 // Revolut X orders
 router.post('/:portfolioId/orders/limit', authenticate, placeLimitOrder);
