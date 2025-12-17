@@ -219,6 +219,13 @@ const PortfolioDetail: React.FC = () => {
             <span className="badge-info">Simple Balance View (No P/L Tracking)</span>
           </div>
           <div className="header-actions">
+            <button 
+              onClick={() => navigate(`/portfolios/${id}/trade`)} 
+              className="btn-primary"
+              style={{ marginRight: '10px' }}
+            >
+              🚀 Trade
+            </button>
             <button onClick={handleRefreshPrices} className="btn-secondary">
               🔄 Refresh Balances
             </button>
