@@ -4,7 +4,7 @@ import { Portfolio } from '../entities/Portfolio';
 
 interface AuthRequest extends Request {
   user?: {
-    userId: number;
+    userId: string;
     email: string;
   };
 }
