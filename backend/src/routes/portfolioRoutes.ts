@@ -25,6 +25,8 @@ import {
 } from '../controllers/portfolioBalanceController';
 import {
   placeLimitOrder,
+  listOrders,
+  cancelOrder,
 } from '../controllers/revolutXController';
 
 const router = Router();
@@ -57,6 +59,8 @@ router.delete('/:portfolioId/trades/:tradeId', authenticate, deleteTrade);
 
 // Revolut X orders
 router.post('/:portfolioId/orders/limit', authenticate, placeLimitOrder);
+router.get('/:portfolioId/orders', authenticate, listOrders);
+router.delete('/:portfolioId/orders/:orderId', authenticate, cancelOrder);
 
 // Sync and analytics
 router.post('/:portfolioId/sync', authenticate, syncBinanceTrades);
