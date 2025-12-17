@@ -24,6 +24,12 @@ import crypto from 'crypto';
  * - Deposits/withdrawals must be tracked manually using the Transfer entity
  * - Users can add manual transfers in the UI (Add Transfer button)
  * 
+ * API Endpoints:
+ * - POST /api/1.0/orders - Place new order
+ * - GET /api/1.0/orders/active - List active orders
+ * - DELETE /api/1.0/orders/:id - Cancel order
+ * - GET /api/1.0/orders/historical - Historical orders
+ * 
  * Documentation: https://developer.revolut.com/docs/x-api/revolut-x-crypto-exchange-rest-api
  */
 export class RevolutXService {
@@ -336,19 +342,20 @@ export class RevolutXService {
   }
 
   /**
-   * List all open orders
+   * List all active (open) orders
+   * Endpoint: GET /api/1.0/orders/active
    */
   async listOpenOrders(): Promise<any[]> {
     try {
       const response = await this.makeAuthenticatedRequest(
         'GET',
-        '/api/1.0/orders'
+        '/api/1.0/orders/active'
       );
       
       // Response can be array or object with data property
       const orders = Array.isArray(response) ? response : (response.data || []);
       
-      console.log(`[Revolut X] Fetched ${orders.length} open orders`);
+      console.log(`[Revolut X] Fetched ${orders.length} active orders`);
       return orders;
     } catch (error) {
       console.error('[Revolut X] Error listing orders:', error);
