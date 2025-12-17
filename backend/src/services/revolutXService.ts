@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import * as nacl from 'tweetnacl';
 import { decrypt } from '../utils/encryption';
 import { ExchangeApiKey } from '../entities/ExchangeApiKey';
+import crypto from 'crypto';
 
 /**
  * RevolutXService - Handles Revolut X API authentication and data fetching
@@ -240,7 +241,7 @@ export class RevolutXService {
   }
 
   private async makeAuthenticatedRequest(
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'DELETE',
     path: string,
     queryParams?: Record<string, any>,
     data?: any
@@ -294,6 +295,81 @@ export class RevolutXService {
     } catch (error) {
       throw new Error(`Failed to fetch Revolut X balances: ${error}`);
     }
+  }
+
+  /**
+   * Place a limit order on Revolut X
+   * @param symbol - Trading pair (e.g., "BTC-EUR")
+   * @param side - "BUY" or "SELL"
+   * @param baseSize - Amount in base currency (e.g., "0.001" for BTC)
+   * @param price - Limit price in quote currency (e.g., "50000" for EUR)
+   */
+  async placeLimitOrder(params: {
+    symbol: string;
+    side: 'BUY' | 'SELL';
+    baseSize: string;
+    price: string;
+  }): Promise<any> {
+    const orderData = {
+      client_order_id: crypto.randomUUID(),
+      symbol: params.symbol.toUpperCase(),
+      side: params.side.toUpperCase(),
+      order_configuration: {
+        limit: {
+          base_size: params.baseSize,
+          price: params.price
+        }
+      }
+    };
+
+    console.log('[Revolut X] Placing limit order:', orderData);
+    
+    const response = await this.makeAuthenticatedRequest(
+      'POST',
+      '/api/1.0/orders',
+      undefined,
+      orderData
+    );
+    
+    console.log('[Revolut X] Order placed successfully:', response);
+    return response;
+  }
+
+  /**
+   * List all open orders
+   */
+  async listOpenOrders(): Promise<any[]> {
+    try {
+      const response = await this.makeAuthenticatedRequest(
+        'GET',
+        '/api/1.0/orders'
+      );
+      
+      // Response can be array or object with data property
+      const orders = Array.isArray(response) ? response : (response.data || []);
+      
+      console.log(`[Revolut X] Fetched ${orders.length} open orders`);
+      return orders;
+    } catch (error) {
+      console.error('[Revolut X] Error listing orders:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Cancel a specific order by ID
+   * @param orderId - Order ID to cancel
+   */
+  async cancelOrder(orderId: string): Promise<any> {
+    console.log(`[Revolut X] Cancelling order: ${orderId}`);
+    
+    const response = await this.makeAuthenticatedRequest(
+      'DELETE',
+      `/api/1.0/orders/${orderId}`
+    );
+    
+    console.log(`[Revolut X] Order ${orderId} cancelled successfully`);
+    return response;
   }
 
   /**
