@@ -25,6 +25,9 @@ export class Portfolio {
   @Column({ type: 'varchar', length: 50, nullable: true })
   exchange?: string; // 'binance', 'revolut-x', or null for manual portfolios
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  revolutXApiKey?: string; // Revolut X API key for placing orders
+
   @Column({ 
     type: 'decimal', 
     precision: 20, 
