@@ -3,6 +3,7 @@ import { User } from './User';
 import { Trade } from './Trade';
 import { Transfer } from './Transfer';
 import { ClosedPosition } from './ClosedPosition';
+import { ExchangeApiKey } from './ExchangeApiKey';
 
 @Entity('portfolios')
 export class Portfolio {
@@ -26,7 +27,14 @@ export class Portfolio {
   exchange?: string; // 'binance', 'revolut-x', or null for manual portfolios
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  revolutXApiKey?: string; // Revolut X API key for placing orders
+  revolutXApiKey?: string; // Revolut X API key for placing orders (deprecated - use exchangeApiKey)
+
+  @Column({ type: 'uuid', nullable: true })
+  exchangeApiKeyId?: string;
+
+  @ManyToOne(() => ExchangeApiKey, { nullable: true })
+  @JoinColumn({ name: 'exchangeApiKeyId' })
+  exchangeApiKey?: ExchangeApiKey;
 
   @Column({ 
     type: 'decimal', 
