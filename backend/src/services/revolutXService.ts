@@ -29,6 +29,7 @@ import crypto from 'crypto';
  * - GET /api/1.0/orders/active - List active orders
  * - DELETE /api/1.0/orders/:id - Cancel order
  * - GET /api/1.0/orders/historical - Historical orders
+ * - GET /api/1.0/public/orderbook/:symbol - Get order book (public, no auth)
  * 
  * Documentation: https://developer.revolut.com/docs/x-api/revolut-x-crypto-exchange-rest-api
  */
@@ -300,6 +301,46 @@ export class RevolutXService {
       return data.filter((balance: any) => parseFloat(balance.total || 0) > 0);
     } catch (error) {
       throw new Error(`Failed to fetch Revolut X balances: ${error}`);
+    }
+  }
+
+  /**
+   * Get current market price (ticker) for a trading pair
+   * Uses public order book endpoint to get best bid/ask prices
+   * @param symbol - Trading pair (e.g., "BTC-EUR", "DOGE-EUR")
+   * @returns Object with bid, ask, and mid price
+   */
+  async getTicker(symbol: string): Promise<{ bid: number; ask: number; mid: number }> {
+    try {
+      // Public endpoint - no authentication required
+      const response = await this.client.get(`/api/1.0/public/orderbook/${symbol.toUpperCase()}`);
+      
+      const orderBook = response.data;
+      
+      // Get best bid (highest buy price) and best ask (lowest sell price)
+      const bestBid = orderBook.bids && orderBook.bids.length > 0 
+        ? parseFloat(orderBook.bids[0].px) 
+        : 0;
+      
+      const bestAsk = orderBook.asks && orderBook.asks.length > 0 
+        ? parseFloat(orderBook.asks[0].px) 
+        : 0;
+      
+      // Mid price is average of bid and ask
+      const mid = bestBid > 0 && bestAsk > 0 
+        ? (bestBid + bestAsk) / 2 
+        : bestAsk || bestBid;
+      
+      console.log(`[Revolut X] Ticker for ${symbol}: bid=${bestBid}, ask=${bestAsk}, mid=${mid}`);
+      
+      return {
+        bid: bestBid,
+        ask: bestAsk,
+        mid: mid
+      };
+    } catch (error: any) {
+      console.error(`[Revolut X] Failed to get ticker for ${symbol}:`, error.message);
+      throw new Error(`Failed to get ticker for ${symbol}: ${error.message}`);
     }
   }
 
