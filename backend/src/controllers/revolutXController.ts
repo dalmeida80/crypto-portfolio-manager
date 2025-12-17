@@ -22,6 +22,53 @@ async function getRevolutXService(portfolio: Portfolio): Promise<RevolutXService
 }
 
 /**
+ * Get current market price (ticker) for a trading pair
+ * GET /api/portfolios/:portfolioId/ticker/:symbol
+ */
+export const getTicker = async (req: AuthRequest, res: Response) => {
+  try {
+    const { portfolioId, symbol } = req.params;
+
+    if (!symbol) {
+      return res.status(400).json({ 
+        error: 'Symbol is required' 
+      });
+    }
+
+    const portfolioRepository = AppDataSource.getRepository(Portfolio);
+    const portfolio = await portfolioRepository.findOne({
+      where: { 
+        id: portfolioId, 
+        userId: req.user!.userId 
+      },
+      relations: ['exchangeApiKey']
+    });
+
+    if (!portfolio) {
+      return res.status(404).json({ 
+        error: 'Portfolio not found or unauthorized' 
+      });
+    }
+
+    const revolutXService = await getRevolutXService(portfolio);
+    const ticker = await revolutXService.getTicker(symbol);
+
+    res.json({
+      success: true,
+      symbol: symbol.toUpperCase(),
+      ticker: ticker
+    });
+
+  } catch (error: any) {
+    console.error('Get ticker error:', error);
+    res.status(500).json({ 
+      error: 'Failed to get ticker',
+      message: error.message
+    });
+  }
+};
+
+/**
  * Place a limit order on Revolut X
  * POST /api/portfolios/:portfolioId/orders/limit
  */
