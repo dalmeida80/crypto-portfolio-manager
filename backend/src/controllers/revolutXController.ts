@@ -1,13 +1,24 @@
 import { Request, Response } from 'express';
 import { AppDataSource } from '../index';
 import { Portfolio } from '../entities/Portfolio';
-import { ExchangeApiKey } from '../entities/ExchangeApiKey';
+import { RevolutXService } from '../services/revolutXService';
 
 interface AuthRequest extends Request {
   user?: {
     userId: string;
     email: string;
   };
+}
+
+/**
+ * Get Revolut X service instance for a portfolio
+ */
+async function getRevolutXService(portfolio: Portfolio): Promise<RevolutXService> {
+  if (!portfolio.exchangeApiKey || portfolio.exchangeApiKey.exchange !== 'revolutx') {
+    throw new Error('Revolut X API key not configured for this portfolio');
+  }
+  
+  return await RevolutXService.createFromApiKey(portfolio.exchangeApiKey);
 }
 
 /**
@@ -32,6 +43,22 @@ export const placeLimitOrder = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    // Validate numeric values
+    const numAmount = parseFloat(amount);
+    const numPrice = parseFloat(price);
+    
+    if (isNaN(numAmount) || numAmount <= 0) {
+      return res.status(400).json({ 
+        error: 'Invalid amount. Must be a positive number' 
+      });
+    }
+    
+    if (isNaN(numPrice) || numPrice <= 0) {
+      return res.status(400).json({ 
+        error: 'Invalid price. Must be a positive number' 
+      });
+    }
+
     // Get portfolio with Revolut X API key
     const portfolioRepository = AppDataSource.getRepository(Portfolio);
     const portfolio = await portfolioRepository.findOne({
@@ -48,29 +75,21 @@ export const placeLimitOrder = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Check if portfolio has Revolut X API key configured
-    if (!portfolio.exchangeApiKey || portfolio.exchangeApiKey.exchange !== 'revolutx') {
-      return res.status(400).json({ 
-        error: 'Revolut X API key not configured for this portfolio' 
-      });
-    }
+    // Get Revolut X service and place order
+    const revolutXService = await getRevolutXService(portfolio);
+    
+    const result = await revolutXService.placeLimitOrder({
+      symbol: pair.toUpperCase(), // Ensure format BTC-EUR
+      side: side.toUpperCase() as 'BUY' | 'SELL',
+      baseSize: numAmount.toString(),
+      price: numPrice.toString()
+    });
 
-    // TODO: Decrypt API key/secret and use proper Ed25519 signing
-    // For now, returning mock response
-    const mockOrder = {
-      id: `order_${Date.now()}`,
-      pair,
-      side: side.toLowerCase(),
-      amount: parseFloat(amount),
-      price: parseFloat(price),
-      status: 'pending',
-      createdAt: new Date().toISOString()
-    };
+    console.log('[Controller] Order placed successfully:', result);
 
-    // Return success response
     res.json({
       success: true,
-      order: mockOrder,
+      order: result,
       portfolio: {
         id: portfolio.id,
         name: portfolio.name
@@ -79,9 +98,12 @@ export const placeLimitOrder = async (req: AuthRequest, res: Response) => {
 
   } catch (error: any) {
     console.error('Revolut X order error:', error);
+    
+    // Return detailed error for debugging
     res.status(500).json({ 
       error: 'Failed to place order',
-      message: error.message 
+      message: error.message,
+      details: error.response?.data || null
     });
   }
 };
@@ -94,7 +116,6 @@ export const listOrders = async (req: AuthRequest, res: Response) => {
   try {
     const { portfolioId } = req.params;
 
-    // Get portfolio
     const portfolioRepository = AppDataSource.getRepository(Portfolio);
     const portfolio = await portfolioRepository.findOne({
       where: { 
@@ -110,36 +131,22 @@ export const listOrders = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    if (!portfolio.exchangeApiKey || portfolio.exchangeApiKey.exchange !== 'revolutx') {
-      return res.status(400).json({ 
-        error: 'Revolut X API key not configured for this portfolio' 
-      });
-    }
+    const revolutXService = await getRevolutXService(portfolio);
+    const orders = await revolutXService.listOpenOrders();
 
-    // TODO: Call Revolut X API to get real orders
-    // For now, returning mock data
-    const mockOrders = [
-      {
-        id: 'order_001',
-        pair: 'DOGE-EUR',
-        side: 'buy',
-        amount: 1000,
-        price: 0.35,
-        status: 'open',
-        createdAt: new Date().toISOString()
-      }
-    ];
+    console.log(`[Controller] Fetched ${orders.length} orders`);
 
     res.json({
       success: true,
-      orders: mockOrders
+      orders: orders
     });
 
   } catch (error: any) {
     console.error('List orders error:', error);
     res.status(500).json({ 
       error: 'Failed to list orders',
-      message: error.message 
+      message: error.message,
+      details: error.response?.data || null
     });
   }
 };
@@ -152,7 +159,12 @@ export const cancelOrder = async (req: AuthRequest, res: Response) => {
   try {
     const { portfolioId, orderId } = req.params;
 
-    // Get portfolio
+    if (!orderId) {
+      return res.status(400).json({ 
+        error: 'Order ID is required' 
+      });
+    }
+
     const portfolioRepository = AppDataSource.getRepository(Portfolio);
     const portfolio = await portfolioRepository.findOne({
       where: { 
@@ -168,14 +180,11 @@ export const cancelOrder = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    if (!portfolio.exchangeApiKey || portfolio.exchangeApiKey.exchange !== 'revolutx') {
-      return res.status(400).json({ 
-        error: 'Revolut X API key not configured for this portfolio' 
-      });
-    }
+    const revolutXService = await getRevolutXService(portfolio);
+    await revolutXService.cancelOrder(orderId);
 
-    // TODO: Call Revolut X API to cancel order
-    // For now, returning mock response
+    console.log(`[Controller] Order ${orderId} cancelled successfully`);
+
     res.json({
       success: true,
       message: `Order ${orderId} cancelled successfully`
@@ -185,7 +194,8 @@ export const cancelOrder = async (req: AuthRequest, res: Response) => {
     console.error('Cancel order error:', error);
     res.status(500).json({ 
       error: 'Failed to cancel order',
-      message: error.message 
+      message: error.message,
+      details: error.response?.data || null
     });
   }
 };
