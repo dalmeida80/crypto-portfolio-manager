@@ -29,7 +29,7 @@ import crypto from 'crypto';
  * - GET /api/1.0/orders/active - List active orders
  * - DELETE /api/1.0/orders/:id - Cancel order
  * - GET /api/1.0/orders/historical - Historical orders
- * - GET /api/1.0/public/order-book?symbol={symbol} - Get order book (requires auth)
+ * - GET /api/1.0/public/order-book/{symbol} - Get order book (requires auth)
  * 
  * Documentation: https://developer.revolut.com/docs/x-api/revolut-x-crypto-exchange-rest-api
  */
@@ -310,18 +310,18 @@ export class RevolutXService {
 
   /**
    * Get current market price (ticker) for a trading pair
-   * Uses order book endpoint with authentication and symbol query parameter
+   * Uses order book endpoint with symbol as path parameter
    * @param symbol - Trading pair (e.g., "BTC-EUR", "DOGE-EUR")
    * @returns Object with bid, ask, and mid price
    */
   async getTicker(symbol: string): Promise<{ bid: number; ask: number; mid: number }> {
     try {
-      // Endpoint: GET /api/1.0/public/order-book?symbol={symbol}
-      // Note: Requires authentication and symbol as query parameter
+      // Endpoint: GET /api/1.0/public/order-book/{symbol}
+      // Symbol is a PATH parameter, not query parameter
+      const symbolUpper = symbol.toUpperCase();
       const response = await this.makeAuthenticatedRequest(
         'GET',
-        '/api/1.0/public/order-book',
-        { symbol: symbol.toUpperCase() }
+        `/api/1.0/public/order-book/${symbolUpper}`
       );
       
       // Response structure: { data: { bids: [...], asks: [...] }, metadata: {...} }
