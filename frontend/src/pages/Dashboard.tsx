@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Portfolio } from '../types';
 import apiService, { BalanceResponse } from '../services/api';
+import '../styles/modern-dashboard.css';
 
 interface PortfolioWithBalance extends Portfolio {
   balanceData?: BalanceResponse;
