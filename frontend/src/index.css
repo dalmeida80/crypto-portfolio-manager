@@ -19,6 +19,7 @@ body,
 #root {
   height: 100%;
   width: 100%;
+  background: var(--bg-primary) !important;
 }
 
 body {
@@ -27,13 +28,22 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: var(--bg-primary);
+  background: var(--bg-primary) !important;
   color: var(--text-primary);
+  overflow-x: hidden;
 }
 
 code {
   font-family: 'Fira Code', source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
+}
+
+/* Force dark background everywhere */
+.layout,
+.main-content,
+div[class*="container"],
+main {
+  background: var(--bg-primary) !important;
 }
 
 /* Shadcn/UI Dark Theme Integration */
