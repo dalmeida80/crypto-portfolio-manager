@@ -29,6 +29,32 @@ const formatPrice = (value: number | null | undefined): string => {
   return num.toFixed(2);
 };
 
+// Custom Tooltip Component
+const CustomTooltip = ({ active, payload, currencySymbol }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div style={{
+        background: 'var(--bg-secondary)',
+        border: '1px solid var(--border-medium)',
+        borderRadius: '8px',
+        padding: '12px',
+        color: 'var(--text-primary)'
+      }}>
+        <p style={{ margin: 0, fontWeight: 600, color: 'var(--text-primary)' }}>
+          {payload[0].name}
+        </p>
+        <p style={{ margin: '4px 0 0 0', color: 'var(--text-primary)' }}>
+          {currencySymbol}{formatNumber(payload[0].value)}
+        </p>
+        <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+          {payload[0].payload.percentage}%
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
 const PortfolioDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -254,7 +280,7 @@ const PortfolioDetail: React.FC = () => {
             </div>
           </div>
 
-          {/* Pie Chart Section - Dark Background */}
+          {/* Pie Chart Section - Dark Background with Custom Tooltip */}
           <div className="chart-section" style={{ 
             marginBottom: '2rem', 
             background: 'var(--bg-card)', 
@@ -279,15 +305,7 @@ const PortfolioDetail: React.FC = () => {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip 
-                  formatter={(value: number) => `${currencySymbol}${formatNumber(value)}`}
-                  contentStyle={{ 
-                    background: 'var(--bg-secondary)', 
-                    border: '1px solid var(--border-light)',
-                    borderRadius: '8px',
-                    color: 'var(--text-primary)'
-                  }}
-                />
+                <Tooltip content={<CustomTooltip currencySymbol={currencySymbol} />} />
                 <Legend 
                   wrapperStyle={{ color: 'var(--text-primary)' }}
                 />
