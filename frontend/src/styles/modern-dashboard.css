@@ -1,10 +1,9 @@
-/* Modern Dashboard Styles with Glassmorphism */
+/* Modern Dashboard with Professional Dark Theme */
 
 .modern-dashboard {
   min-height: calc(100vh - 80px);
   padding: 2rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  background-attachment: fixed;
+  background: var(--bg-primary);
 }
 
 /* Hero Section */
@@ -17,7 +16,7 @@
 }
 
 .hero-content {
-  color: white;
+  color: var(--text-primary);
 }
 
 .hero-title {
@@ -25,11 +24,11 @@
   font-weight: 800;
   line-height: 1.1;
   margin: 0 0 1rem 0;
-  color: white;
+  color: var(--text-primary);
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, #fff 0%, #a8edea 100%);
+  background: linear-gradient(135deg, var(--accent-orange) 0%, var(--accent-cyan) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -37,36 +36,37 @@
 
 .hero-subtitle {
   font-size: 1.25rem;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-secondary);
   margin: 0;
 }
 
-/* Glass Card Effect */
+/* Glass Card Effect - Dark Theme Version */
 .glass-card {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   transition: all 0.3s ease;
 }
 
 .glass-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.5);
-  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  border-color: var(--border-medium);
 }
 
 /* Total Value Card */
 .total-value-card {
   padding: 2rem;
   min-width: 350px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent-orange);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.1);
 }
 
 .card-label {
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.5rem;
@@ -75,7 +75,7 @@
 .total-value {
   font-size: 3rem;
   font-weight: 800;
-  color: white;
+  color: var(--text-primary);
   margin: 0.5rem 0;
 }
 
@@ -89,11 +89,11 @@
 }
 
 .profit-loss.positive {
-  color: #4ade80;
+  color: var(--success);
 }
 
 .profit-loss.negative {
-  color: #f87171;
+  color: var(--error);
 }
 
 .pl-percentage {
@@ -114,9 +114,9 @@
   align-items: center;
   gap: 1rem;
   padding: 1.25rem 1.5rem;
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  color: white;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  color: var(--text-primary);
   text-decoration: none;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -128,7 +128,10 @@
 }
 
 .action-btn:not(:disabled):hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--bg-card-hover);
+  border-color: var(--accent-orange);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
 }
 
 .action-icon {
@@ -144,7 +147,7 @@
 .section-title {
   font-size: 2rem;
   font-weight: 700;
-  color: white;
+  color: var(--text-primary);
   margin: 0 0 1.5rem 0;
 }
 
@@ -161,6 +164,12 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+}
+
+.portfolio-card:hover {
+  border-color: var(--accent-orange);
 }
 
 .card-header {
@@ -172,23 +181,24 @@
 .portfolio-name {
   font-size: 1.5rem;
   font-weight: 700;
-  color: white;
+  color: var(--text-primary);
   margin: 0 0 0.5rem 0;
 }
 
 .portfolio-description {
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
   margin: 0 0 0.75rem 0;
 }
 
 .exchange-badge {
   display: inline-block;
   padding: 0.25rem 0.75rem;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid var(--accent-orange);
   border-radius: 20px;
   font-size: 0.75rem;
-  color: white;
+  color: var(--accent-orange);
   font-weight: 600;
 }
 
@@ -198,8 +208,8 @@
   flex-direction: column;
   gap: 1rem;
   padding: 1rem 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .stat-item {
@@ -210,7 +220,7 @@
 
 .stat-label {
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -218,7 +228,7 @@
 .stat-value {
   font-size: 1.5rem;
   font-weight: 700;
-  color: white;
+  color: var(--text-primary);
 }
 
 .stat-value.main {
@@ -226,11 +236,11 @@
 }
 
 .stat-value.positive {
-  color: #4ade80;
+  color: var(--success);
 }
 
 .stat-value.negative {
-  color: #f87171;
+  color: var(--error);
 }
 
 .stat-percent {
@@ -249,7 +259,7 @@
   flex: 1;
   padding: 0.75rem 1.5rem;
   border: none;
-  border-radius: 12px;
+  border-radius: 8px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
@@ -257,31 +267,34 @@
 }
 
 .view-btn {
-  background: rgba(255, 255, 255, 0.9);
-  color: #667eea;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-medium);
 }
 
 .view-btn:hover {
-  background: white;
+  background: var(--bg-card-hover);
+  border-color: var(--accent-orange);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
 }
 
 .trade-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--accent-orange);
   color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .trade-btn:hover {
+  background: #d97706;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
 }
 
 /* Empty State */
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
+  background: var(--bg-card);
 }
 
 .empty-icon {
@@ -292,13 +305,13 @@
 .empty-state h3 {
   font-size: 1.5rem;
   font-weight: 700;
-  color: white;
+  color: var(--text-primary);
   margin: 0 0 0.5rem 0;
 }
 
 .empty-state p {
   font-size: 1rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
   margin: 0 0 2rem 0;
 }
 
@@ -307,17 +320,18 @@
   align-items: center;
   gap: 0.5rem;
   padding: 1rem 2rem;
-  background: white;
-  color: #667eea;
+  background: var(--accent-orange);
+  color: white;
   text-decoration: none;
-  border-radius: 12px;
+  border-radius: 8px;
   font-weight: 600;
   transition: all 0.3s ease;
 }
 
 .create-btn:hover {
+  background: #d97706;
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 20px rgba(245, 158, 11, 0.3);
 }
 
 /* Error Banner */
@@ -327,15 +341,15 @@
   align-items: center;
   padding: 1rem 1.5rem;
   margin-bottom: 2rem;
-  background: rgba(248, 113, 113, 0.2);
-  border: 1px solid rgba(248, 113, 113, 0.5);
-  color: white;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--error);
+  color: var(--error);
 }
 
 .retry-btn {
   padding: 0.5rem 1rem;
-  background: white;
-  color: #667eea;
+  background: var(--accent-orange);
+  color: white;
   border: none;
   border-radius: 8px;
   font-weight: 600;
@@ -344,6 +358,7 @@
 }
 
 .retry-btn:hover {
+  background: #d97706;
   transform: scale(1.05);
 }
 
@@ -354,14 +369,14 @@
   align-items: center;
   justify-content: center;
   min-height: 60vh;
-  color: white;
+  color: var(--text-primary);
 }
 
 .loading-spinner {
   width: 60px;
   height: 60px;
-  border: 4px solid rgba(255, 255, 255, 0.2);
-  border-top-color: white;
+  border: 4px solid var(--border-light);
+  border-top-color: var(--accent-orange);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 1rem;
@@ -373,7 +388,7 @@
 
 .loading-container p {
   font-size: 1.125rem;
-  opacity: 0.8;
+  color: var(--text-secondary);
 }
 
 /* Responsive Design */
