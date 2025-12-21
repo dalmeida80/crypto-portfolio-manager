@@ -29,7 +29,7 @@ import crypto from 'crypto';
  * - GET /api/1.0/orders/active - List active orders
  * - DELETE /api/1.0/orders/:id - Cancel order
  * - GET /api/1.0/orders/historical - Historical orders
- * - GET /api/1.0/public/orderbook/:symbol - Get order book (public, no auth)
+ * - GET /api/1.0/public/orderbook/:symbol - Get order book (requires auth despite being "public")
  * 
  * Documentation: https://developer.revolut.com/docs/x-api/revolut-x-crypto-exchange-rest-api
  */
@@ -306,31 +306,36 @@ export class RevolutXService {
 
   /**
    * Get current market price (ticker) for a trading pair
-   * Uses public order book endpoint (no authentication required)
+   * Uses order book endpoint (REQUIRES authentication despite being "public")
    * @param symbol - Trading pair (e.g., "BTC-EUR", "DOGE-EUR")
    * @returns Object with bid, ask, and mid price
    */
   async getTicker(symbol: string): Promise<{ bid: number; ask: number; mid: number }> {
     try {
-      // Public endpoint - no authentication required
-      // Endpoint format: /api/1.0/public/orderbook/{symbol}
-      const response = await this.client.get(`/api/1.0/public/orderbook/${symbol.toUpperCase()}`);
+      // Note: Despite the "public" name, this endpoint REQUIRES authentication
+      // Endpoint: GET /api/1.0/public/orderbook/{symbol}
+      const response = await this.makeAuthenticatedRequest(
+        'GET',
+        `/api/1.0/public/orderbook/${symbol.toUpperCase()}`
+      );
       
       // Response structure: { data: { bids: [...], asks: [...] }, metadata: {...} }
-      const orderBookData = response.data?.data;
+      const orderBookData = response.data;
       
       if (!orderBookData) {
         throw new Error('Invalid order book response format');
       }
       
-      // Get best bid (highest buy price) - bids are sorted descending
+      // Get best bid (highest buy price) - bids are sorted descending by price
+      // Each entry: { p: "price", s: "size" }
       const bestBid = orderBookData.bids && orderBookData.bids.length > 0 
-        ? parseFloat(orderBookData.bids[0].p)  // 'p' is the price field
+        ? parseFloat(orderBookData.bids[0].p)  // First item is highest bid
         : 0;
       
-      // Get best ask (lowest sell price) - asks are sorted descending
+      // Get best ask (lowest sell price) - asks are also sorted descending by price
+      // So the LAST item is the lowest ask (best for buyers)
       const bestAsk = orderBookData.asks && orderBookData.asks.length > 0 
-        ? parseFloat(orderBookData.asks[orderBookData.asks.length - 1].p)  // Last item is lowest price
+        ? parseFloat(orderBookData.asks[orderBookData.asks.length - 1].p)  // Last item is lowest ask
         : 0;
       
       // Mid price is average of bid and ask
