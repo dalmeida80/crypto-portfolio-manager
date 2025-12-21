@@ -29,7 +29,7 @@ import crypto from 'crypto';
  * - GET /api/1.0/orders/active - List active orders
  * - DELETE /api/1.0/orders/:id - Cancel order
  * - GET /api/1.0/orders/historical - Historical orders
- * - GET /api/1.0/public/orderbook/:symbol - Get order book (requires auth despite being "public")
+ * - GET /api/1.0/orderbook/:symbol - Get order book (requires auth)
  * 
  * Documentation: https://developer.revolut.com/docs/x-api/revolut-x-crypto-exchange-rest-api
  */
@@ -306,17 +306,17 @@ export class RevolutXService {
 
   /**
    * Get current market price (ticker) for a trading pair
-   * Uses order book endpoint (REQUIRES authentication despite being "public")
+   * Uses order book endpoint with authentication
    * @param symbol - Trading pair (e.g., "BTC-EUR", "DOGE-EUR")
    * @returns Object with bid, ask, and mid price
    */
   async getTicker(symbol: string): Promise<{ bid: number; ask: number; mid: number }> {
     try {
-      // Note: Despite the "public" name, this endpoint REQUIRES authentication
-      // Endpoint: GET /api/1.0/public/orderbook/{symbol}
+      // Endpoint: GET /api/1.0/orderbook/{symbol}
+      // Note: Requires authentication despite retrieving market data
       const response = await this.makeAuthenticatedRequest(
         'GET',
-        `/api/1.0/public/orderbook/${symbol.toUpperCase()}`
+        `/api/1.0/orderbook/${symbol.toUpperCase()}`
       );
       
       // Response structure: { data: { bids: [...], asks: [...] }, metadata: {...} }
@@ -327,7 +327,7 @@ export class RevolutXService {
       }
       
       // Get best bid (highest buy price) - bids are sorted descending by price
-      // Each entry: { p: "price", s: "size" }
+      // Each entry: { p: "price", s: "size", ... }
       const bestBid = orderBookData.bids && orderBookData.bids.length > 0 
         ? parseFloat(orderBookData.bids[0].p)  // First item is highest bid
         : 0;
