@@ -19,6 +19,12 @@ interface Order {
   createdAt: string;
 }
 
+interface Ticker {
+  bid: number;
+  ask: number;
+  mid: number;
+}
+
 const RevolutXTrade: React.FC = () => {
   const { id: portfolioId } = useParams<{ id: string }>();
   const { isAuthenticated } = useAuth();
@@ -39,6 +45,11 @@ const RevolutXTrade: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [availablePairs, setAvailablePairs] = useState<string[]>([]);
+  
+  // Current price state
+  const [currentPrice, setCurrentPrice] = useState<Ticker | null>(null);
+  const [loadingPrice, setLoadingPrice] = useState(false);
+  const [priceError, setPriceError] = useState<string | null>(null);
 
   // Comprehensive list of popular crypto pairs on Revolut X
   const DEFAULT_PAIRS = [
@@ -102,6 +113,58 @@ const RevolutXTrade: React.FC = () => {
     fetchHoldings();
   }, [portfolioId]);
 
+  // Fetch current price for selected pair
+  const fetchCurrentPrice = async (pair: string) => {
+    setLoadingPrice(true);
+    setPriceError(null);
+    
+    try {
+      const response = await fetch(`/api/portfolios/${portfolioId}/ticker/${pair}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentPrice(data.ticker);
+        
+        // Auto-fill price with current mid price if price field is empty
+        if (!formData.price && data.ticker.mid) {
+          setFormData(prev => ({
+            ...prev,
+            price: data.ticker.mid.toFixed(8)
+          }));
+        }
+      } else {
+        const errorData = await response.json();
+        setPriceError(errorData.message || 'Failed to fetch price');
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch price:', err);
+      setPriceError(err.message || 'Network error');
+    } finally {
+      setLoadingPrice(false);
+    }
+  };
+
+  // Fetch price when pair changes
+  useEffect(() => {
+    if (formData.pair && activeTab === 'create') {
+      fetchCurrentPrice(formData.pair);
+    }
+  }, [formData.pair, activeTab]);
+
+  // Auto refresh price every 10 seconds when on create tab
+  useEffect(() => {
+    if (activeTab === 'create' && formData.pair) {
+      const interval = setInterval(() => {
+        fetchCurrentPrice(formData.pair);
+      }, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, formData.pair]);
+
   // Fetch open orders
   const fetchOrders = async () => {
     setLoadingOrders(true);
@@ -156,7 +219,7 @@ const RevolutXTrade: React.FC = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to place order');
+        throw new Error(errorData.error || errorData.message || 'Failed to place order');
       }
 
       const data = await response.json();
@@ -196,6 +259,25 @@ const RevolutXTrade: React.FC = () => {
       alert('Ordem cancelada com sucesso!');
     } catch (err: any) {
       alert(`Erro ao cancelar ordem: ${err.message}`);
+    }
+  };
+
+  // Quick price fill buttons
+  const fillPriceWithBid = () => {
+    if (currentPrice?.bid) {
+      setFormData(prev => ({ ...prev, price: currentPrice.bid.toFixed(8) }));
+    }
+  };
+
+  const fillPriceWithAsk = () => {
+    if (currentPrice?.ask) {
+      setFormData(prev => ({ ...prev, price: currentPrice.ask.toFixed(8) }));
+    }
+  };
+
+  const fillPriceWithMid = () => {
+    if (currentPrice?.mid) {
+      setFormData(prev => ({ ...prev, price: currentPrice.mid.toFixed(8) }));
     }
   };
 
@@ -266,6 +348,65 @@ const RevolutXTrade: React.FC = () => {
               </select>
             </div>
 
+            {/* Current Price Display */}
+            {loadingPrice ? (
+              <div className="mb-6 bg-blue-500/20 border border-blue-500 rounded-xl p-4">
+                <p className="text-blue-300">⏳ A carregar preço atual...</p>
+              </div>
+            ) : priceError ? (
+              <div className="mb-6 bg-yellow-500/20 border border-yellow-500 rounded-xl p-4">
+                <p className="text-yellow-300">⚠️ {priceError}</p>
+              </div>
+            ) : currentPrice ? (
+              <div className="mb-6 bg-green-500/20 border border-green-500 rounded-xl p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-green-300 font-bold">💹 Preço Atual ({formData.pair})</h3>
+                  <button
+                    type="button"
+                    onClick={() => fetchCurrentPrice(formData.pair)}
+                    className="text-green-300 hover:text-green-100 text-sm"
+                  >
+                    🔄 Atualizar
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-green-200 text-sm">Compra (Bid)</p>
+                    <p className="text-white font-mono text-lg">€{currentPrice.bid.toFixed(8)}</p>
+                    <button
+                      type="button"
+                      onClick={fillPriceWithBid}
+                      className="text-xs text-green-300 hover:text-green-100 mt-1"
+                    >
+                      Usar este preço
+                    </button>
+                  </div>
+                  <div>
+                    <p className="text-green-200 text-sm">Médio</p>
+                    <p className="text-white font-mono text-lg">€{currentPrice.mid.toFixed(8)}</p>
+                    <button
+                      type="button"
+                      onClick={fillPriceWithMid}
+                      className="text-xs text-green-300 hover:text-green-100 mt-1"
+                    >
+                      Usar este preço
+                    </button>
+                  </div>
+                  <div>
+                    <p className="text-green-200 text-sm">Venda (Ask)</p>
+                    <p className="text-white font-mono text-lg">€{currentPrice.ask.toFixed(8)}</p>
+                    <button
+                      type="button"
+                      onClick={fillPriceWithAsk}
+                      className="text-xs text-green-300 hover:text-green-100 mt-1"
+                    >
+                      Usar este preço
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             {/* Side Selection */}
             <div className="mb-6">
               <label className="block text-purple-200 font-semibold mb-2">
@@ -327,6 +468,11 @@ const RevolutXTrade: React.FC = () => {
                 className="w-full bg-slate-800 text-white rounded-lg px-4 py-3 border border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
                 required
               />
+              {formData.amount && formData.price && (
+                <p className="mt-2 text-purple-300 text-sm">
+                  💰 Valor total: €{(parseFloat(formData.amount) * parseFloat(formData.price)).toFixed(2)}
+                </p>
+              )}
             </div>
 
             {/* Submit Button */}
@@ -335,7 +481,7 @@ const RevolutXTrade: React.FC = () => {
               disabled={loading}
               className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold py-4 rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
             >
-              {loading ? '⏳ Processando...' : '✅ Colocar Ordem'}
+              {loading ? '⏳ Processando...' : `✅ ${formData.side === 'buy' ? 'Comprar' : 'Vender'} ${formData.pair}`}
             </button>
 
             {/* Success Result */}
@@ -379,9 +525,6 @@ const RevolutXTrade: React.FC = () => {
             ) : orders.length === 0 ? (
               <div className="text-center text-purple-200 py-8">
                 <p>📭 Não há ordens abertas</p>
-                <p className="text-sm mt-2 text-purple-300">
-                  (Nota: Ordens reais da Revolut X aparecerão aqui quando a API estiver conectada)
-                </p>
               </div>
             ) : (
               <div className="space-y-4">
