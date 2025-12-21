@@ -306,24 +306,31 @@ export class RevolutXService {
 
   /**
    * Get current market price (ticker) for a trading pair
-   * Uses public order book endpoint to get best bid/ask prices
+   * Uses public order book endpoint (no authentication required)
    * @param symbol - Trading pair (e.g., "BTC-EUR", "DOGE-EUR")
    * @returns Object with bid, ask, and mid price
    */
   async getTicker(symbol: string): Promise<{ bid: number; ask: number; mid: number }> {
     try {
       // Public endpoint - no authentication required
+      // Endpoint format: /api/1.0/public/orderbook/{symbol}
       const response = await this.client.get(`/api/1.0/public/orderbook/${symbol.toUpperCase()}`);
       
-      const orderBook = response.data;
+      // Response structure: { data: { bids: [...], asks: [...] }, metadata: {...} }
+      const orderBookData = response.data?.data;
       
-      // Get best bid (highest buy price) and best ask (lowest sell price)
-      const bestBid = orderBook.bids && orderBook.bids.length > 0 
-        ? parseFloat(orderBook.bids[0].px) 
+      if (!orderBookData) {
+        throw new Error('Invalid order book response format');
+      }
+      
+      // Get best bid (highest buy price) - bids are sorted descending
+      const bestBid = orderBookData.bids && orderBookData.bids.length > 0 
+        ? parseFloat(orderBookData.bids[0].p)  // 'p' is the price field
         : 0;
       
-      const bestAsk = orderBook.asks && orderBook.asks.length > 0 
-        ? parseFloat(orderBook.asks[0].px) 
+      // Get best ask (lowest sell price) - asks are sorted descending
+      const bestAsk = orderBookData.asks && orderBookData.asks.length > 0 
+        ? parseFloat(orderBookData.asks[orderBookData.asks.length - 1].p)  // Last item is lowest price
         : 0;
       
       // Mid price is average of bid and ask
