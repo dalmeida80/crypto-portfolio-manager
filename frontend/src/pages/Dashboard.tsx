@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Portfolio } from '../types';
 import apiService, { BalanceResponse } from '../services/api';
@@ -13,7 +13,6 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [portfolios, setPortfolios] = useState<PortfolioWithBalance[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -26,7 +25,6 @@ const Dashboard: React.FC = () => {
       setError('');
       const data = await apiService.getPortfolios();
       
-      // For each portfolio, load balance data if it's Revolut X
       const portfoliosWithBalances = await Promise.all(
         (data || []).map(async (portfolio) => {
           if (portfolio.exchange === 'revolutx') {
@@ -55,25 +53,6 @@ const Dashboard: React.FC = () => {
       setPortfolios([]);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleRefreshAll = async () => {
-    try {
-      setRefreshing(true);
-      setError('');
-      
-      const trackingPortfolios = portfolios.filter(p => p.exchange !== 'revolutx');
-      if (trackingPortfolios.length > 0) {
-        await apiService.refreshAllPortfolios();
-      }
-      
-      await loadData();
-    } catch (err: any) {
-      console.error('Error refreshing portfolios:', err);
-      setError('Failed to refresh prices');
-    } finally {
-      setRefreshing(false);
     }
   };
 
@@ -151,26 +130,6 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Quick Actions */}
-        <div className="quick-actions">
-          <button 
-            onClick={handleRefreshAll} 
-            className="action-btn glass-card"
-            disabled={refreshing || portfolios.length === 0}
-          >
-            <span className="action-icon">{refreshing ? '⏳' : '🔄'}</span>
-            <span className="action-text">Refresh Prices</span>
-          </button>
-          <Link to="/portfolios" className="action-btn glass-card">
-            <span className="action-icon">⚙️</span>
-            <span className="action-text">Manage Portfolios</span>
-          </Link>
-          <Link to="/settings" className="action-btn glass-card">
-            <span className="action-icon">🔑</span>
-            <span className="action-text">API Settings</span>
-          </Link>
-        </div>
-
         {/* Portfolios Grid */}
         <div className="portfolios-section">
           <h2 className="section-title">Your Portfolios</h2>
@@ -180,9 +139,9 @@ const Dashboard: React.FC = () => {
               <div className="empty-icon">📊</div>
               <h3>No Portfolios Yet</h3>
               <p>Create your first portfolio to start tracking your crypto investments</p>
-              <Link to="/portfolios" className="create-btn">
+              <button onClick={() => navigate('/portfolios')} className="create-btn">
                 <span>+</span> Create Portfolio
-              </Link>
+              </button>
             </div>
           ) : (
             <div className="portfolios-grid">
