@@ -27,6 +27,14 @@ interface Ticker {
   mid: number;
 }
 
+interface Holding {
+  asset: string;
+  quantity: number;
+  currentPrice: number;
+  currentValue: number;
+  symbol: string;
+}
+
 const RevolutXTrade: React.FC = () => {
   const { id: portfolioId } = useParams<{ id: string }>();
   const { isAuthenticated } = useAuth();
@@ -47,6 +55,7 @@ const RevolutXTrade: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [availablePairs, setAvailablePairs] = useState<string[]>([]);
+  const [holdings, setHoldings] = useState<Holding[]>([]);
   
   const [currentPrice, setCurrentPrice] = useState<Ticker | null>(null);
   const [loadingPrice, setLoadingPrice] = useState(false);
@@ -74,6 +83,7 @@ const RevolutXTrade: React.FC = () => {
 
         if (response.ok) {
           const data = await response.json();
+          setHoldings(data.holdings || []);
           const holdingPairs = data.holdings?.map((h: any) => `${h.asset}-EUR`) || [];
           const allPairs = [...new Set([...DEFAULT_PAIRS, ...holdingPairs])].sort();
           setAvailablePairs(allPairs);
@@ -88,6 +98,13 @@ const RevolutXTrade: React.FC = () => {
 
     fetchHoldings();
   }, [portfolioId]);
+
+  // Get available balance for selected pair
+  const getAvailableBalance = () => {
+    const asset = formData.pair.split('-')[0]; // Extract asset from pair (e.g., BTC from BTC-EUR)
+    const holding = holdings.find(h => h.asset === asset);
+    return holding ? holding.quantity : 0;
+  };
 
   const fetchCurrentPrice = async (pair: string) => {
     setLoadingPrice(true);
@@ -236,6 +253,16 @@ const RevolutXTrade: React.FC = () => {
     }
   };
 
+  const fillMaxAmount = () => {
+    const available = getAvailableBalance();
+    if (available > 0) {
+      setFormData(prev => ({ ...prev, amount: available.toFixed(8) }));
+    }
+  };
+
+  const availableBalance = getAvailableBalance();
+  const asset = formData.pair.split('-')[0];
+
   return (
     <Layout>
       <div className="trade-page">
@@ -284,6 +311,27 @@ const RevolutXTrade: React.FC = () => {
                 ))}
               </select>
             </div>
+
+            {/* Available Balance Display */}
+            {formData.side === 'sell' && (
+              <div className="balance-info">
+                <div className="balance-card">
+                  <div className="balance-label">💰 Available {asset}</div>
+                  <div className="balance-value">
+                    {availableBalance.toFixed(8)} {asset}
+                  </div>
+                  {availableBalance > 0 && (
+                    <button 
+                      type="button" 
+                      onClick={fillMaxAmount} 
+                      className="max-btn"
+                    >
+                      Use Max
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Current Price Display */}
             {loadingPrice ? (
