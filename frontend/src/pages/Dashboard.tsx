@@ -189,7 +189,7 @@ const Dashboard: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Card Actions */}
+                    {/* Card Actions - Same for all portfolios */}
                     <div className="card-actions">
                       <button 
                         onClick={() => navigate(`/portfolios/${portfolio.id}`)} 
@@ -197,14 +197,6 @@ const Dashboard: React.FC = () => {
                       >
                         View Details →
                       </button>
-                      {isSimpleView && (
-                        <button 
-                          onClick={() => navigate(`/portfolios/${portfolio.id}/trade`)} 
-                          className="trade-btn"
-                        >
-                          🚀 Trade
-                        </button>
-                      )}
                     </div>
                   </div>
                 );
