@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import Layout from '../../components/Layout';
+import '../../styles/trade.css';
 
 interface TradeFormData {
   pair: string;
@@ -46,62 +48,36 @@ const RevolutXTrade: React.FC = () => {
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [availablePairs, setAvailablePairs] = useState<string[]>([]);
   
-  // Current price state
   const [currentPrice, setCurrentPrice] = useState<Ticker | null>(null);
   const [loadingPrice, setLoadingPrice] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
 
-  // Comprehensive list of popular crypto pairs on Revolut X
   const DEFAULT_PAIRS = [
-    'BTC-EUR',   // Bitcoin
-    'ETH-EUR',   // Ethereum
-    'DOGE-EUR',  // Dogecoin
-    'XRP-EUR',   // Ripple
-    'SOL-EUR',   // Solana
-    'ADA-EUR',   // Cardano
-    'AVAX-EUR',  // Avalanche
-    'DOT-EUR',   // Polkadot
-    'MATIC-EUR', // Polygon
-    'LINK-EUR',  // Chainlink
-    'UNI-EUR',   // Uniswap
-    'LTC-EUR',   // Litecoin
-    'ATOM-EUR',  // Cosmos
-    'NEAR-EUR',  // Near
-    'ALGO-EUR',  // Algorand
-    'PEPE-EUR',  // Pepe
-    'SHIB-EUR',  // Shiba Inu
-    'ONDO-EUR',  // Ondo
-    'APT-EUR',   // Aptos
-    'ARB-EUR',   // Arbitrum
+    'BTC-EUR', 'ETH-EUR', 'DOGE-EUR', 'XRP-EUR', 'SOL-EUR', 'ADA-EUR',
+    'AVAX-EUR', 'DOT-EUR', 'MATIC-EUR', 'LINK-EUR', 'UNI-EUR', 'LTC-EUR',
+    'ATOM-EUR', 'NEAR-EUR', 'ALGO-EUR', 'PEPE-EUR', 'SHIB-EUR', 'ONDO-EUR',
+    'APT-EUR', 'ARB-EUR',
   ].sort();
 
-  // Redirect if not authenticated
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login');
     }
   }, [isAuthenticated, navigate]);
 
-  // Fetch portfolio holdings to get available pairs
   useEffect(() => {
     const fetchHoldings = async () => {
       try {
         const response = await fetch(`/api/portfolios/${portfolioId}/balances`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('accessToken')}`
-          }
+          headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` }
         });
 
         if (response.ok) {
           const data = await response.json();
-          // Extract pairs from holdings
           const holdingPairs = data.holdings?.map((h: any) => `${h.asset}-EUR`) || [];
-          
-          // Combine with default pairs and remove duplicates
           const allPairs = [...new Set([...DEFAULT_PAIRS, ...holdingPairs])].sort();
           setAvailablePairs(allPairs);
         } else {
-          // Fallback to default pairs if fetch fails
           setAvailablePairs(DEFAULT_PAIRS);
         }
       } catch (err) {
@@ -113,28 +89,21 @@ const RevolutXTrade: React.FC = () => {
     fetchHoldings();
   }, [portfolioId]);
 
-  // Fetch current price for selected pair
   const fetchCurrentPrice = async (pair: string) => {
     setLoadingPrice(true);
     setPriceError(null);
     
     try {
       const response = await fetch(`/api/portfolios/${portfolioId}/ticker/${pair}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('accessToken')}`
-        }
+        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` }
       });
 
       if (response.ok) {
         const data = await response.json();
         setCurrentPrice(data.ticker);
         
-        // Auto-fill price with current mid price if price field is empty
         if (!formData.price && data.ticker.mid) {
-          setFormData(prev => ({
-            ...prev,
-            price: data.ticker.mid.toFixed(8)
-          }));
+          setFormData(prev => ({ ...prev, price: data.ticker.mid.toFixed(8) }));
         }
       } else {
         const errorData = await response.json();
@@ -148,31 +117,24 @@ const RevolutXTrade: React.FC = () => {
     }
   };
 
-  // Fetch price when pair changes
   useEffect(() => {
     if (formData.pair && activeTab === 'create') {
       fetchCurrentPrice(formData.pair);
     }
   }, [formData.pair, activeTab]);
 
-  // Auto refresh price every 10 seconds when on create tab
   useEffect(() => {
     if (activeTab === 'create' && formData.pair) {
-      const interval = setInterval(() => {
-        fetchCurrentPrice(formData.pair);
-      }, 10000);
+      const interval = setInterval(() => fetchCurrentPrice(formData.pair), 10000);
       return () => clearInterval(interval);
     }
   }, [activeTab, formData.pair]);
 
-  // Fetch open orders
   const fetchOrders = async () => {
     setLoadingOrders(true);
     try {
       const response = await fetch(`/api/portfolios/${portfolioId}/orders`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('accessToken')}`
-        }
+        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` }
       });
 
       if (response.ok) {
@@ -186,14 +148,12 @@ const RevolutXTrade: React.FC = () => {
     }
   };
 
-  // Load orders when tab changes
   useEffect(() => {
     if (activeTab === 'orders') {
       fetchOrders();
     }
   }, [activeTab]);
 
-  // Auto refresh orders every 10 seconds
   useEffect(() => {
     if (activeTab === 'orders') {
       const interval = setInterval(fetchOrders, 10000);
@@ -225,7 +185,6 @@ const RevolutXTrade: React.FC = () => {
       const data = await response.json();
       setResult(data);
       
-      // Refresh orders after creating new one
       if (activeTab === 'orders') {
         fetchOrders();
       }
@@ -244,9 +203,7 @@ const RevolutXTrade: React.FC = () => {
     try {
       const response = await fetch(`/api/portfolios/${portfolioId}/orders/${orderId}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('accessToken')}`
-        }
+        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` }
       });
 
       if (!response.ok) {
@@ -254,7 +211,6 @@ const RevolutXTrade: React.FC = () => {
         throw new Error(errorData.error || 'Failed to cancel order');
       }
 
-      // Refresh orders
       fetchOrders();
       alert('Order cancelled successfully!');
     } catch (err: any) {
@@ -262,7 +218,6 @@ const RevolutXTrade: React.FC = () => {
     }
   };
 
-  // Quick price fill buttons
   const fillPriceWithBid = () => {
     if (currentPrice?.bid) {
       setFormData(prev => ({ ...prev, price: currentPrice.bid.toFixed(8) }));
@@ -282,47 +237,30 @@ const RevolutXTrade: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6">
-      <div className="max-w-6xl mx-auto">
+    <Layout>
+      <div className="trade-page">
         {/* Header */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 mb-6 shadow-2xl">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-2">
-                🚀 Revolut X Trading
-              </h1>
-              <p className="text-purple-200">
-                Portfolio ID: <span className="font-mono text-yellow-300">{portfolioId}</span>
-              </p>
-            </div>
-            <button
-              onClick={() => navigate(`/portfolios/${portfolioId}`)}
-              className="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-all"
-            >
-              ← Back
-            </button>
+        <div className="trade-header">
+          <div>
+            <h1>🚀 Revolut X Trading</h1>
+            <p className="portfolio-id">Portfolio ID: {portfolioId}</p>
           </div>
+          <button onClick={() => navigate(`/portfolios/${portfolioId}`)} className="btn-back">
+            ← Back
+          </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-4 mb-6">
+        <div className="trade-tabs">
           <button
             onClick={() => setActiveTab('create')}
-            className={`px-6 py-3 rounded-lg font-bold transition-all ${
-              activeTab === 'create'
-                ? 'bg-purple-600 text-white shadow-lg'
-                : 'bg-white/10 text-gray-300 hover:bg-white/20'
-            }`}
+            className={`tab-btn ${activeTab === 'create' ? 'active' : ''}`}
           >
             📝 Create Order
           </button>
           <button
             onClick={() => setActiveTab('orders')}
-            className={`px-6 py-3 rounded-lg font-bold transition-all ${
-              activeTab === 'orders'
-                ? 'bg-purple-600 text-white shadow-lg'
-                : 'bg-white/10 text-gray-300 hover:bg-white/20'
-            }`}
+            className={`tab-btn ${activeTab === 'orders' ? 'active' : ''}`}
           >
             📊 Open Orders {orders.length > 0 && `(${orders.length})`}
           </button>
@@ -330,17 +268,16 @@ const RevolutXTrade: React.FC = () => {
 
         {/* Create Order Tab */}
         {activeTab === 'create' && (
-          <form onSubmit={handleSubmit} className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 shadow-2xl">
+          <form onSubmit={handleSubmit} className="trade-form">
             {/* Pair Selection */}
-            <div className="mb-6">
-              <label className="block text-purple-200 font-semibold mb-2">
+            <div className="form-group">
+              <label>
                 Trading Pair
-                <span className="ml-2 text-sm text-purple-300">({availablePairs.length} pairs available)</span>
+                <span className="hint">({availablePairs.length} pairs available)</span>
               </label>
               <select
                 value={formData.pair}
                 onChange={(e) => setFormData({ ...formData, pair: e.target.value })}
-                className="w-full bg-slate-800 text-white rounded-lg px-4 py-3 border border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
               >
                 {availablePairs.map(pair => (
                   <option key={pair} value={pair}>{pair}</option>
@@ -350,88 +287,56 @@ const RevolutXTrade: React.FC = () => {
 
             {/* Current Price Display */}
             {loadingPrice ? (
-              <div className="mb-6 bg-blue-500/20 border border-blue-500 rounded-xl p-4">
-                <p className="text-blue-300">⏳ Loading current price...</p>
+              <div className="price-box loading">
+                <p>⏳ Loading current price...</p>
               </div>
             ) : priceError ? (
-              <div className="mb-6 bg-yellow-500/20 border border-yellow-500 rounded-xl p-4">
-                <p className="text-yellow-300">⚠️ {priceError}</p>
+              <div className="price-box error">
+                <p>⚠️ {priceError}</p>
               </div>
             ) : currentPrice ? (
-              <div className="mb-6 bg-green-500/20 border border-green-500 rounded-xl p-4">
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="text-green-300 font-bold">💹 Current Price ({formData.pair})</h3>
-                  <button
-                    type="button"
-                    onClick={() => fetchCurrentPrice(formData.pair)}
-                    className="text-green-300 hover:text-green-100 text-sm"
-                  >
+              <div className="price-box">
+                <div className="price-header">
+                  <h3>💹 Current Price ({formData.pair})</h3>
+                  <button type="button" onClick={() => fetchCurrentPrice(formData.pair)} className="refresh-btn">
                     🔄 Refresh
                   </button>
                 </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-green-200 text-sm">Buy (Bid)</p>
-                    <p className="text-white font-mono text-lg">€{currentPrice.bid.toFixed(8)}</p>
-                    <button
-                      type="button"
-                      onClick={fillPriceWithBid}
-                      className="text-xs text-green-300 hover:text-green-100 mt-1"
-                    >
-                      Use this price
-                    </button>
+                <div className="price-grid">
+                  <div className="price-item">
+                    <p className="price-label">Buy (Bid)</p>
+                    <p className="price-value">€{currentPrice.bid.toFixed(8)}</p>
+                    <button type="button" onClick={fillPriceWithBid} className="use-price-btn">Use this price</button>
                   </div>
-                  <div>
-                    <p className="text-green-200 text-sm">Mid</p>
-                    <p className="text-white font-mono text-lg">€{currentPrice.mid.toFixed(8)}</p>
-                    <button
-                      type="button"
-                      onClick={fillPriceWithMid}
-                      className="text-xs text-green-300 hover:text-green-100 mt-1"
-                    >
-                      Use this price
-                    </button>
+                  <div className="price-item">
+                    <p className="price-label">Mid</p>
+                    <p className="price-value">€{currentPrice.mid.toFixed(8)}</p>
+                    <button type="button" onClick={fillPriceWithMid} className="use-price-btn">Use this price</button>
                   </div>
-                  <div>
-                    <p className="text-green-200 text-sm">Sell (Ask)</p>
-                    <p className="text-white font-mono text-lg">€{currentPrice.ask.toFixed(8)}</p>
-                    <button
-                      type="button"
-                      onClick={fillPriceWithAsk}
-                      className="text-xs text-green-300 hover:text-green-100 mt-1"
-                    >
-                      Use this price
-                    </button>
+                  <div className="price-item">
+                    <p className="price-label">Sell (Ask)</p>
+                    <p className="price-value">€{currentPrice.ask.toFixed(8)}</p>
+                    <button type="button" onClick={fillPriceWithAsk} className="use-price-btn">Use this price</button>
                   </div>
                 </div>
               </div>
             ) : null}
 
             {/* Side Selection */}
-            <div className="mb-6">
-              <label className="block text-purple-200 font-semibold mb-2">
-                Order Type
-              </label>
-              <div className="grid grid-cols-2 gap-4">
+            <div className="form-group">
+              <label>Order Type</label>
+              <div className="side-buttons">
                 <button
                   type="button"
                   onClick={() => setFormData({ ...formData, side: 'buy' })}
-                  className={`py-3 rounded-lg font-bold transition-all ${
-                    formData.side === 'buy'
-                      ? 'bg-green-600 text-white shadow-lg'
-                      : 'bg-slate-700 text-gray-300'
-                  }`}
+                  className={`side-btn buy ${formData.side === 'buy' ? 'active' : ''}`}
                 >
                   🟢 BUY
                 </button>
                 <button
                   type="button"
                   onClick={() => setFormData({ ...formData, side: 'sell' })}
-                  className={`py-3 rounded-lg font-bold transition-all ${
-                    formData.side === 'sell'
-                      ? 'bg-red-600 text-white shadow-lg'
-                      : 'bg-slate-700 text-gray-300'
-                  }`}
+                  className={`side-btn sell ${formData.side === 'sell' ? 'active' : ''}`}
                 >
                   🔴 SELL
                 </button>
@@ -439,66 +344,54 @@ const RevolutXTrade: React.FC = () => {
             </div>
 
             {/* Amount Input */}
-            <div className="mb-6">
-              <label className="block text-purple-200 font-semibold mb-2">
-                Amount
-              </label>
+            <div className="form-group">
+              <label>Amount</label>
               <input
                 type="number"
                 step="0.00000001"
                 value={formData.amount}
                 onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                 placeholder="0.00000000"
-                className="w-full bg-slate-800 text-white rounded-lg px-4 py-3 border border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
                 required
               />
             </div>
 
             {/* Price Input */}
-            <div className="mb-8">
-              <label className="block text-purple-200 font-semibold mb-2">
-                Limit Price (EUR)
-              </label>
+            <div className="form-group">
+              <label>Limit Price (EUR)</label>
               <input
                 type="number"
                 step="0.00000001"
                 value={formData.price}
                 onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                 placeholder="0.00000000"
-                className="w-full bg-slate-800 text-white rounded-lg px-4 py-3 border border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
                 required
               />
               {formData.amount && formData.price && (
-                <p className="mt-2 text-purple-300 text-sm">
+                <p className="total-value">
                   💰 Total value: €{(parseFloat(formData.amount) * parseFloat(formData.price)).toFixed(2)}
                 </p>
               )}
             </div>
 
             {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold py-4 rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
-            >
+            <button type="submit" disabled={loading} className="submit-btn">
               {loading ? '⏳ Processing...' : `✅ ${formData.side === 'buy' ? 'Buy' : 'Sell'} ${formData.pair}`}
             </button>
 
             {/* Success Result */}
             {result && (
-              <div className="mt-6 bg-green-500/20 border border-green-500 rounded-xl p-6 backdrop-blur-lg">
-                <h3 className="text-green-300 font-bold text-lg mb-2">✅ Order Created!</h3>
-                <pre className="text-white text-sm overflow-auto">
-                  {JSON.stringify(result, null, 2)}
-                </pre>
+              <div className="result-box success">
+                <h3>✅ Order Created!</h3>
+                <pre>{JSON.stringify(result, null, 2)}</pre>
               </div>
             )}
 
             {/* Error Alert */}
             {error && (
-              <div className="mt-6 bg-red-500/20 border border-red-500 rounded-xl p-6 backdrop-blur-lg">
-                <h3 className="text-red-300 font-bold text-lg">❌ Error</h3>
-                <p className="text-white">{error}</p>
+              <div className="result-box error">
+                <h3>❌ Error</h3>
+                <p>{error}</p>
               </div>
             )}
           </form>
@@ -506,72 +399,50 @@ const RevolutXTrade: React.FC = () => {
 
         {/* Open Orders Tab */}
         {activeTab === 'orders' && (
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 shadow-2xl">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-white">📊 Open Orders</h2>
-              <button
-                onClick={fetchOrders}
-                disabled={loadingOrders}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-all"
-              >
+          <div className="orders-section">
+            <div className="orders-header">
+              <h2>📊 Open Orders</h2>
+              <button onClick={fetchOrders} disabled={loadingOrders} className="btn-secondary">
                 {loadingOrders ? '⏳' : '🔄'} Refresh
               </button>
             </div>
 
             {loadingOrders && orders.length === 0 ? (
-              <div className="text-center text-purple-200 py-8">
+              <div className="empty-state">
                 <p>⏳ Loading orders...</p>
               </div>
             ) : orders.length === 0 ? (
-              <div className="text-center text-purple-200 py-8">
+              <div className="empty-state">
                 <p>📭 No open orders</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="orders-list">
                 {orders.map(order => (
-                  <div
-                    key={order.id}
-                    className="bg-slate-800/50 rounded-lg p-4 border border-purple-500/30 hover:border-purple-500 transition-all"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="text-xl">
-                            {order.side === 'buy' ? '🟢' : '🔴'}
-                          </span>
-                          <span className="text-white font-bold text-lg">
-                            {order.pair}
-                          </span>
-                          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                            order.side === 'buy' 
-                              ? 'bg-green-600/30 text-green-300'
-                              : 'bg-red-600/30 text-red-300'
-                          }`}>
-                            {order.side.toUpperCase()}
-                          </span>
+                  <div key={order.id} className="order-card">
+                    <div className="order-info">
+                      <div className="order-header">
+                        <span className="order-icon">{order.side === 'buy' ? '🟢' : '🔴'}</span>
+                        <span className="order-pair">{order.pair}</span>
+                        <span className={`order-badge ${order.side}`}>{order.side.toUpperCase()}</span>
+                      </div>
+                      <div className="order-details">
+                        <div>
+                          <p className="detail-label">Amount</p>
+                          <p className="detail-value">{order.amount}</p>
                         </div>
-                        <div className="grid grid-cols-3 gap-4 text-sm">
-                          <div>
-                            <p className="text-purple-300">Amount</p>
-                            <p className="text-white font-mono">{order.amount}</p>
-                          </div>
-                          <div>
-                            <p className="text-purple-300">Price</p>
-                            <p className="text-white font-mono">{order.price} EUR</p>
-                          </div>
-                          <div>
-                            <p className="text-purple-300">Status</p>
-                            <p className="text-yellow-300">{order.status}</p>
-                          </div>
+                        <div>
+                          <p className="detail-label">Price</p>
+                          <p className="detail-value">{order.price} EUR</p>
+                        </div>
+                        <div>
+                          <p className="detail-label">Status</p>
+                          <p className="detail-value status">{order.status}</p>
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleCancelOrder(order.id)}
-                        className="ml-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all font-semibold"
-                      >
-                        ❌ Cancel
-                      </button>
                     </div>
+                    <button onClick={() => handleCancelOrder(order.id)} className="cancel-btn">
+                      ❌ Cancel
+                    </button>
                   </div>
                 ))}
               </div>
@@ -579,7 +450,7 @@ const RevolutXTrade: React.FC = () => {
           </div>
         )}
       </div>
-    </div>
+    </Layout>
   );
 };
 
