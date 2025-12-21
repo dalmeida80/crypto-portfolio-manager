@@ -29,7 +29,7 @@ import crypto from 'crypto';
  * - GET /api/1.0/orders/active - List active orders
  * - DELETE /api/1.0/orders/:id - Cancel order
  * - GET /api/1.0/orders/historical - Historical orders
- * - GET /api/1.0/public/order-book - Get order book (requires auth)
+ * - GET /api/1.0/public/order-book?symbol={symbol} - Get order book (requires auth)
  * 
  * Documentation: https://developer.revolut.com/docs/x-api/revolut-x-crypto-exchange-rest-api
  */
@@ -244,7 +244,7 @@ export class RevolutXService {
       url.searchParams.append(key, params[key]);
     });
     
-    return url.search.substring(1);
+    return url.search; // Include the '?' prefix
   }
 
   private async makeAuthenticatedRequest(
@@ -256,6 +256,10 @@ export class RevolutXService {
     const timestamp = Date.now().toString();
     const queryStringForSignature = this.buildQueryStringForSignature(queryParams);
     const body = data ? JSON.stringify(data) : '';
+    
+    // Log for debugging
+    console.log(`[Revolut X] Request: ${method} ${path}${queryStringForSignature}`);
+    
     const signature = this.generateSignature(timestamp, method, path, queryStringForSignature, body);
 
     const headers = {
