@@ -101,7 +101,7 @@ const RevolutXTrade: React.FC = () => {
 
   // Get available balance for selected pair
   const getAvailableBalance = () => {
-    const asset = formData.pair.split('-')[0]; // Extract asset from pair (e.g., BTC from BTC-EUR)
+    const asset = formData.pair.split('-')[0];
     const holding = holdings.find(h => h.asset === asset);
     return holding ? holding.quantity : 0;
   };
@@ -118,10 +118,7 @@ const RevolutXTrade: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         setCurrentPrice(data.ticker);
-        
-        if (!formData.price && data.ticker.mid) {
-          setFormData(prev => ({ ...prev, price: data.ticker.mid.toFixed(8) }));
-        }
+        // DON'T auto-fill price - leave it empty for user to choose
       } else {
         const errorData = await response.json();
         setPriceError(errorData.message || 'Failed to fetch price');
