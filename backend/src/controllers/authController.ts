@@ -90,3 +90,54 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+export const changePassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = (req as any).userId;
+
+    // Validate input
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ 
+        message: 'Current password and new password are required' 
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      res.status(400).json({ 
+        message: 'New password must be at least 6 characters' 
+      });
+      return;
+    }
+
+    const userRepository = AppDataSource.getRepository(User);
+
+    // Find user
+    const user = await userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    // Verify current password
+    const isPasswordValid = await user.comparePassword(currentPassword);
+    if (!isPasswordValid) {
+      res.status(401).json({ message: 'Current password is incorrect' });
+      return;
+    }
+
+    // Update to new password
+    user.password = newPassword;
+    await user.hashPassword();
+    await userRepository.save(user);
+
+    res.status(200).json({ 
+      success: true,
+      message: 'Password changed successfully' 
+    });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
