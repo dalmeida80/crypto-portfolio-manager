@@ -49,7 +49,7 @@ const RevolutXTrade: React.FC = () => {
   });
 
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   
   const [orders, setOrders] = useState<Order[]>([]);
@@ -99,7 +99,6 @@ const RevolutXTrade: React.FC = () => {
     fetchHoldings();
   }, [portfolioId]);
 
-  // Get available balance for selected pair
   const getAvailableBalance = () => {
     const asset = formData.pair.split('-')[0];
     const holding = holdings.find(h => h.asset === asset);
@@ -118,7 +117,6 @@ const RevolutXTrade: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         setCurrentPrice(data.ticker);
-        // DON'T auto-fill price - leave it empty for user to choose
       } else {
         const errorData = await response.json();
         setPriceError(errorData.message || 'Failed to fetch price');
@@ -179,7 +177,7 @@ const RevolutXTrade: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setResult(null);
+    setSuccessMessage(null);
 
     try {
       const response = await fetch(`/api/portfolios/${portfolioId}/orders/limit`, {
@@ -196,12 +194,23 @@ const RevolutXTrade: React.FC = () => {
         throw new Error(errorData.error || errorData.message || 'Failed to place order');
       }
 
-      const data = await response.json();
-      setResult(data);
+      // Show simple success message
+      setSuccessMessage('Order created successfully!');
       
+      // Clear form
+      setFormData({
+        ...formData,
+        amount: '',
+        price: ''
+      });
+      
+      // Refresh orders if on orders tab
       if (activeTab === 'orders') {
         fetchOrders();
       }
+      
+      // Auto-hide success message after 5 seconds
+      setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -424,11 +433,10 @@ const RevolutXTrade: React.FC = () => {
               {loading ? '⏳ Processing...' : `✅ ${formData.side === 'buy' ? 'Buy' : 'Sell'} ${formData.pair}`}
             </button>
 
-            {/* Success Result */}
-            {result && (
+            {/* Success Message */}
+            {successMessage && (
               <div className="result-box success">
-                <h3>✅ Order Created!</h3>
-                <pre>{JSON.stringify(result, null, 2)}</pre>
+                <h3>✅ {successMessage}</h3>
               </div>
             )}
 
