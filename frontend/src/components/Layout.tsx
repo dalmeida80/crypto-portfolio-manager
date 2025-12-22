@@ -26,6 +26,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Link to="/dashboard" className="navbar-item">Dashboard</Link>
           <Link to="/portfolios" className="navbar-item">Portfolios</Link>
           <Link to="/settings" className="navbar-item">Settings</Link>
+	  <Link to="/api-keys" className={location.pathname.startsWith("/api-keys") ? "active" : ""}>API Keys</Link>
           <div className="navbar-user">
             <ThemeToggle />
             <span>{user?.name}</span>

@@ -10,6 +10,7 @@ import Portfolios from './pages/Portfolios';
 import PortfolioDetail from './pages/PortfolioDetail';
 import Transfers from './pages/Transfers';
 import Settings from './pages/Settings';
+import ApiKeysPage from "./pages/ApiKeys";
 import { TestShadcn } from './pages/TestShadcn';
 import RevolutXTrade from './pages/revolutx/Trade';
 
@@ -28,6 +29,7 @@ function App() {
               <Route path="/portfolios/:id/transfers" element={<Transfers />} />
               <Route path="/portfolios/:id/trade" element={<RevolutXTrade />} />
               <Route path="/settings" element={<Settings />} />
+	      <Route path="/api-keys" element={<ApiKeysPage />} />
               <Route path="/test-shadcn" element={<TestShadcn />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
             </Routes>
@@ -39,3 +41,4 @@ function App() {
 }
 
 export default App;
+

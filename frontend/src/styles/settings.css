@@ -1,0 +1,15 @@
+.code-block {
+  background: #020617;
+  color: #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  font-family: "Fira Code", Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+  border: 1px solid #1f2937;
+}
+
