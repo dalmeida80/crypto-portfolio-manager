@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import Layout from '../../components/Layout';
-import api from '../../services/api';
+import apiService from '../../services/api';
 
 interface Summary {
   totalDeposits: number;
@@ -50,15 +50,15 @@ export default function Trading212Account() {
   const fetchData = async () => {
     try {
       setError(null);
-      const [summaryRes, transactionsRes] = await Promise.all([
-        api.get(`/portfolios/${id}/trading212/summary`),
-        api.get(`/portfolios/${id}/trading212/transactions?limit=50`)
+      const [summaryData, transactionsData] = await Promise.all([
+        apiService.getTrading212Summary(id!),
+        apiService.getTrading212Transactions(id!, 50, 0)
       ]);
-      setSummary(summaryRes.data);
-      setTransactions(transactionsRes.data.transactions);
+      setSummary(summaryData);
+      setTransactions(transactionsData.transactions);
     } catch (error: any) {
       console.error('Failed to fetch data:', error);
-      setError(error.response?.data?.error || 'Failed to load data');
+      setError(error.message || 'Failed to load data');
     } finally {
       setLoading(false);
     }
@@ -76,19 +76,15 @@ export default function Trading212Account() {
 
     setUploading(true);
     setError(null);
-    const formData = new FormData();
-    formData.append('file', selectedFile);
 
     try {
-      const response = await api.post(`/portfolios/${id}/trading212/import`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      alert(`✅ Import successful!\nImported: ${response.data.imported}\nUpdated: ${response.data.updated}\nDuplicates: ${response.data.duplicates}`);
+      const result = await apiService.importTrading212CSV(id!, selectedFile);
+      alert(`✅ Import successful!\nImported: ${result.imported}\nUpdated: ${result.updated}\nDuplicates: ${result.duplicates}`);
       setSelectedFile(null);
       fetchData();
     } catch (error: any) {
       console.error('Upload failed:', error);
-      const errorMsg = error.response?.data?.error || 'Import failed. Please check the CSV format.';
+      const errorMsg = error.message || 'Import failed. Please check the CSV format.';
       setError(errorMsg);
       alert(`❌ ${errorMsg}`);
     } finally {
