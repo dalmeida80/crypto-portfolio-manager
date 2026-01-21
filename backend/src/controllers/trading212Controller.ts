@@ -18,7 +18,7 @@ export class Trading212Controller {
     try {
       console.log('[Trading212] Import CSV request received');
       const { portfolioId } = req.params;
-      const userId = req.userId;
+      const userId = req.userId?.toString();
 
       console.log(`[Trading212] Portfolio ID: ${portfolioId}, User ID: ${userId}`);
 
@@ -66,7 +66,7 @@ export class Trading212Controller {
     try {
       console.log('[Trading212] Get summary request');
       const { portfolioId } = req.params;
-      const userId = req.userId;
+      const userId = req.userId?.toString();
 
       console.log(`[Trading212] Summary - Portfolio ID: ${portfolioId}, User ID: ${userId}`);
 
@@ -96,7 +96,7 @@ export class Trading212Controller {
     try {
       console.log('[Trading212] Get transactions request');
       const { portfolioId } = req.params;
-      const userId = req.userId;
+      const userId = req.userId?.toString();
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = parseInt(req.query.offset as string) || 0;
 
