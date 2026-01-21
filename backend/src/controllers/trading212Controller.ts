@@ -9,7 +9,10 @@ interface AuthRequest extends Request {
 
 export class Trading212Controller {
   private importService = new Trading212ImportService();
-  private portfolioRepo = AppDataSource.getRepository(Portfolio);
+  
+  private get portfolioRepo() {
+    return AppDataSource.getRepository(Portfolio);
+  }
 
   importCSV = async (req: AuthRequest, res: Response) => {
     try {
