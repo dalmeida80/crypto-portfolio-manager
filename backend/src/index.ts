@@ -10,10 +10,12 @@ import { Portfolio } from './entities/Portfolio';
 import { Trade } from './entities/Trade';
 import { Transfer } from './entities/Transfer';
 import { ClosedPosition } from './entities/ClosedPosition';
+import { Trading212Transaction } from './entities/Trading212Transaction';
 import authRoutes from './routes/authRoutes';
 import exchangeRoutes from './routes/exchangeRoutes';
 import portfolioRoutes from './routes/portfolioRoutes';
 import priceRoutes from './routes/priceRoutes';
+import trading212Routes from './routes/trading212Routes';
 
 dotenv.config();
 
@@ -31,7 +33,7 @@ export const AppDataSource = new DataSource({
   database: process.env.DB_NAME,
   synchronize: true,
   logging: false,
-  entities: [User, ExchangeApiKey, Portfolio, Trade, Transfer, ClosedPosition],
+  entities: [User, ExchangeApiKey, Portfolio, Trade, Transfer, ClosedPosition, Trading212Transaction],
 });
 
 AppDataSource.initialize()
@@ -45,6 +47,7 @@ AppDataSource.initialize()
     app.use('/api/auth', authRoutes);
     app.use('/api/exchange', exchangeRoutes);
     app.use('/api/portfolios', portfolioRoutes);
+    app.use('/api/portfolios', trading212Routes);
     app.use('/api/prices', priceRoutes);
 
     const port = process.env.PORT || 4000;
