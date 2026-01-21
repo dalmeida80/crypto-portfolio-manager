@@ -15,7 +15,7 @@ const parseNum = (value: any): number => {
 
 export const createPortfolio = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { name, description } = req.body;
+    const { name, description, exchange } = req.body;
     const userId = req.user!.userId;
 
     if (!name) {
@@ -29,6 +29,7 @@ export const createPortfolio = async (req: AuthRequest, res: Response): Promise<
     portfolio.userId = userId;
     portfolio.name = name;
     portfolio.description = description;
+    portfolio.exchange = exchange || null;
     portfolio.totalInvested = 0;
     portfolio.currentValue = 0;
     portfolio.profitLoss = 0;
@@ -87,7 +88,7 @@ export const updatePortfolio = async (req: AuthRequest, res: Response): Promise<
   try {
     const userId = req.user!.userId;
     const { portfolioId } = req.params;
-    const { name, description } = req.body;
+    const { name, description, exchange } = req.body;
 
     const portfolioRepo = AppDataSource.getRepository(Portfolio);
     const portfolio = await portfolioRepo.findOne({
@@ -101,6 +102,7 @@ export const updatePortfolio = async (req: AuthRequest, res: Response): Promise<
 
     if (name) portfolio.name = name;
     if (description !== undefined) portfolio.description = description;
+    if (exchange !== undefined) portfolio.exchange = exchange || null;
 
     await portfolioRepo.save(portfolio);
 
