@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../utils/jwt';
 
 export interface AuthRequest extends Request {
-  userId?: number;
+  userId?: string;
 }
 
 export const authenticate = async (
@@ -24,7 +24,7 @@ export const authenticate = async (
       return res.status(401).json({ message: 'Invalid token' });
     }
 
-    req.userId = parseInt(decoded.userId);
+    req.userId = decoded.userId;
     next();
   } catch (error) {
     return res.status(401).json({ message: 'Authentication failed' });
