@@ -1,6 +1,26 @@
 import { parse } from 'csv-parse/sync';
 import { Trading212Transaction } from '../entities/Trading212Transaction';
-import { AppDataSource } from '../config/database';
+import { AppDataSource } from '../index';
+
+interface CSVRow {
+  'ID'?: string;
+  'Action': string;
+  'Time': string;
+  'ISIN'?: string;
+  'Ticker'?: string;
+  'Name'?: string;
+  'Notes'?: string;
+  'No. of shares'?: string;
+  'Price / share'?: string;
+  'Currency (Price / share)'?: string;
+  'Exchange rate'?: string;
+  'Result'?: string;
+  'Currency (Result)'?: string;
+  'Total'?: string;
+  'Currency (Total)'?: string;
+  'Merchant name'?: string;
+  'Merchant category'?: string;
+}
 
 export class Trading212ImportService {
   private transactionRepo = AppDataSource.getRepository(Trading212Transaction);
@@ -11,7 +31,7 @@ export class Trading212ImportService {
     duplicates: number;
     errors: string[];
   }> {
-    const records = parse(csvBuffer, {
+    const records: CSVRow[] = parse(csvBuffer, {
       columns: true,
       skip_empty_lines: true,
       trim: true
@@ -51,33 +71,33 @@ export class Trading212ImportService {
     return { imported, updated, duplicates, errors };
   }
 
-  private mapRowToEntity(row: any, portfolioId: string): Partial<Trading212Transaction> {
+  private mapRowToEntity(row: CSVRow, portfolioId: string): Partial<Trading212Transaction> {
     return {
       portfolioId,
       action: row['Action'],
-      time: new Date(row['Time']),
-      isin: row['ISIN'] || null,
-      ticker: row['Ticker'] || null,
-      name: row['Name'] || null,
-      notes: row['Notes'] || null,
-      externalId: row['ID'] || null,
+      time: new Date(row['Time'] || ''),
+      isin: row['ISIN'] || undefined,
+      ticker: row['Ticker'] || undefined,
+      name: row['Name'] || undefined,
+      notes: row['Notes'] || undefined,
+      externalId: row['ID'] || undefined,
       shares: this.parseDecimal(row['No. of shares']),
       pricePerShare: this.parseDecimal(row['Price / share']),
-      priceCurrency: row['Currency (Price / share)'] || null,
+      priceCurrency: row['Currency (Price / share)'] || undefined,
       exchangeRate: this.parseDecimal(row['Exchange rate']),
       resultAmount: this.parseDecimal(row['Result']),
-      resultCurrency: row['Currency (Result)'] || null,
+      resultCurrency: row['Currency (Result)'] || undefined,
       totalAmount: this.parseDecimal(row['Total']),
-      totalCurrency: row['Currency (Total)'] || null,
-      merchantName: row['Merchant name'] || null,
-      merchantCategory: row['Merchant category'] || null,
+      totalCurrency: row['Currency (Total)'] || undefined,
+      merchantName: row['Merchant name'] || undefined,
+      merchantCategory: row['Merchant category'] || undefined,
     };
   }
 
-  private parseDecimal(value: string): number | null {
-    if (!value) return null;
+  private parseDecimal(value?: string): number | undefined {
+    if (!value) return undefined;
     const parsed = parseFloat(value.replace(/,/g, ''));
-    return isNaN(parsed) ? null : parsed;
+    return isNaN(parsed) ? undefined : parsed;
   }
 
   async getSummary(portfolioId: string) {
