@@ -12,7 +12,11 @@ const Portfolios: React.FC = () => {
   const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingPortfolio, setEditingPortfolio] = useState<Portfolio | null>(null);
-  const [formData, setFormData] = useState({ name: '', description: '' });
+  const [formData, setFormData] = useState({ 
+    name: '', 
+    description: '',
+    exchange: '' as '' | 'binance' | 'revolutx' | 'trading212'
+  });
   const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
@@ -35,10 +39,14 @@ const Portfolios: React.FC = () => {
   const handleOpenModal = (portfolio?: Portfolio) => {
     if (portfolio) {
       setEditingPortfolio(portfolio);
-      setFormData({ name: portfolio.name, description: portfolio.description || '' });
+      setFormData({ 
+        name: portfolio.name, 
+        description: portfolio.description || '',
+        exchange: (portfolio.exchange || '') as '' | 'binance' | 'revolutx' | 'trading212'
+      });
     } else {
       setEditingPortfolio(null);
-      setFormData({ name: '', description: '' });
+      setFormData({ name: '', description: '', exchange: '' });
     }
     setShowModal(true);
   };
@@ -46,7 +54,7 @@ const Portfolios: React.FC = () => {
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingPortfolio(null);
-    setFormData({ name: '', description: '' });
+    setFormData({ name: '', description: '', exchange: '' });
     setError('');
   };
 
@@ -56,11 +64,17 @@ const Portfolios: React.FC = () => {
     setSuccessMessage('');
 
     try {
+      const payload = {
+        name: formData.name,
+        description: formData.description,
+        ...(formData.exchange && { exchange: formData.exchange })
+      };
+
       if (editingPortfolio) {
-        await apiService.updatePortfolio(editingPortfolio.id, formData);
+        await apiService.updatePortfolio(editingPortfolio.id, payload);
         setSuccessMessage('Portfolio updated!');
       } else {
-        await apiService.createPortfolio(formData);
+        await apiService.createPortfolio(payload);
         setSuccessMessage('Portfolio created!');
       }
       handleCloseModal();
@@ -81,6 +95,32 @@ const Portfolios: React.FC = () => {
     } catch (err: any) {
       setError('Failed to delete portfolio');
     }
+  };
+
+  const getExchangeBadge = (exchange?: string | null) => {
+    if (!exchange) return null;
+    const badges: Record<string, { label: string; color: string }> = {
+      binance: { label: 'Binance', color: '#F3BA2F' },
+      revolutx: { label: 'Revolut X', color: '#6366F1' },
+      trading212: { label: 'Trading212', color: '#00C9FF' }
+    };
+    const badge = badges[exchange];
+    if (!badge) return null;
+    return (
+      <span 
+        style={{ 
+          backgroundColor: badge.color, 
+          color: 'white', 
+          padding: '2px 8px', 
+          borderRadius: '4px', 
+          fontSize: '12px',
+          fontWeight: 'bold',
+          marginLeft: '8px'
+        }}
+      >
+        {badge.label}
+      </span>
+    );
   };
 
   if (loading) {
@@ -112,7 +152,10 @@ const Portfolios: React.FC = () => {
             {portfolios.map((p) => (
               <div key={p.id} className="portfolio-item">
                 <div className="portfolio-info">
-                  <h3>{p.name}</h3>
+                  <h3>
+                    {p.name}
+                    {getExchangeBadge(p.exchange)}
+                  </h3>
                   {p.description && <p>{p.description}</p>}
                   <div className="portfolio-stats-small">
                     <span>Invested: ${(p.totalInvested || 0).toFixed(2)}</span>
@@ -142,12 +185,59 @@ const Portfolios: React.FC = () => {
               <form onSubmit={handleSubmit}>
                 <div className="form-group">
                   <label>Portfolio Name *</label>
-                  <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="e.g., Binance" required />
+                  <input 
+                    type="text" 
+                    value={formData.name} 
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })} 
+                    placeholder="e.g., My Trading212 Account" 
+                    required 
+                  />
                 </div>
+
+                <div className="form-group">
+                  <label>
+                    Exchange (optional)
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginLeft: '8px' }}>
+                      Select if this portfolio is linked to a specific exchange
+                    </span>
+                  </label>
+                  <select 
+                    value={formData.exchange} 
+                    onChange={(e) => setFormData({ ...formData, exchange: e.target.value as '' | 'binance' | 'revolutx' | 'trading212' })}
+                    style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid var(--border-medium)' }}
+                  >
+                    <option value="">None (Manual Portfolio)</option>
+                    <option value="binance">Binance</option>
+                    <option value="revolutx">Revolut X</option>
+                    <option value="trading212">Trading212</option>
+                  </select>
+                  {formData.exchange === 'trading212' && (
+                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                      📊 You'll be able to import CSV files and track your stocks/ETFs
+                    </p>
+                  )}
+                  {formData.exchange === 'revolutx' && (
+                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                      🚀 You'll be able to trade directly from the app
+                    </p>
+                  )}
+                  {formData.exchange === 'binance' && (
+                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                      📥 You'll be able to import trades and sync with Binance API
+                    </p>
+                  )}
+                </div>
+
                 <div className="form-group">
                   <label>Description</label>
-                  <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={3} />
+                  <textarea 
+                    value={formData.description} 
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })} 
+                    rows={3} 
+                    placeholder="Optional description for this portfolio"
+                  />
                 </div>
+
                 {error && <div className="error-message">{error}</div>}
                 <div className="modal-actions">
                   <button type="submit" className="btn-primary">{editingPortfolio ? 'Update' : 'Create'}</button>
