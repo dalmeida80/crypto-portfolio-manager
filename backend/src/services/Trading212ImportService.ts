@@ -23,7 +23,9 @@ interface CSVRow {
 }
 
 export class Trading212ImportService {
-  private transactionRepo = AppDataSource.getRepository(Trading212Transaction);
+  private get transactionRepo() {
+    return AppDataSource.getRepository(Trading212Transaction);
+  }
 
   async importCSV(portfolioId: string, csvBuffer: Buffer): Promise<{
     imported: number;
