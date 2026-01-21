@@ -1,11 +1,8 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { Trading212ImportService } from '../services/Trading212ImportService';
 import { AppDataSource } from '../index';
 import { Portfolio } from '../entities/Portfolio';
-
-interface AuthRequest extends Request {
-  userId?: number;
-}
+import { AuthRequest } from '../middleware/authenticate';
 
 export class Trading212Controller {
   private importService = new Trading212ImportService();
@@ -18,7 +15,7 @@ export class Trading212Controller {
     try {
       console.log('[Trading212] Import CSV request received');
       const { portfolioId } = req.params;
-      const userId = req.userId?.toString();
+      const userId = req.userId;
 
       console.log(`[Trading212] Portfolio ID: ${portfolioId}, User ID: ${userId}`);
 
@@ -66,7 +63,7 @@ export class Trading212Controller {
     try {
       console.log('[Trading212] Get summary request');
       const { portfolioId } = req.params;
-      const userId = req.userId?.toString();
+      const userId = req.userId;
 
       console.log(`[Trading212] Summary - Portfolio ID: ${portfolioId}, User ID: ${userId}`);
 
@@ -96,7 +93,7 @@ export class Trading212Controller {
     try {
       console.log('[Trading212] Get transactions request');
       const { portfolioId } = req.params;
-      const userId = req.userId?.toString();
+      const userId = req.userId;
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = parseInt(req.query.offset as string) || 0;
 
