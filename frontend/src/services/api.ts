@@ -120,6 +120,43 @@ export interface PaginatedTradesResponse {
   pagination: PaginationMetadata;
 }
 
+export interface Trading212Summary {
+  totalDeposits: number;
+  totalWithdrawals: number;
+  netDeposits: number;
+  interestOnCash: number;
+  cashback: number;
+  cardDebits: number;
+  currentBalance: number;
+  transactionsCount: number;
+}
+
+export interface Trading212Transaction {
+  id: string;
+  action: string;
+  time: string;
+  ticker?: string;
+  name?: string;
+  shares?: number;
+  pricePerShare?: number;
+  totalAmount?: number;
+  totalCurrency?: string;
+  notes?: string;
+}
+
+export interface Trading212TransactionsResponse {
+  transactions: Trading212Transaction[];
+  total: number;
+}
+
+export interface Trading212ImportResult {
+  message: string;
+  imported: number;
+  updated: number;
+  duplicates: number;
+  errors: string[];
+}
+
 class ApiService {
   private api: AxiosInstance;
 
@@ -347,6 +384,45 @@ class ApiService {
 
   async getImportStatus(portfolioId: string): Promise<ImportStatus> {
     const { data } = await this.api.get(`/exchange/portfolios/${portfolioId}/import-status`);
+    return data;
+  }
+
+  // Trading212 methods
+  async getTrading212Summary(portfolioId: string): Promise<Trading212Summary> {
+    const { data } = await this.api.get<Trading212Summary>(
+      `/portfolios/${portfolioId}/trading212/summary`
+    );
+    return data;
+  }
+
+  async getTrading212Transactions(
+    portfolioId: string,
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<Trading212TransactionsResponse> {
+    const { data } = await this.api.get<Trading212TransactionsResponse>(
+      `/portfolios/${portfolioId}/trading212/transactions`,
+      { params: { limit, offset } }
+    );
+    return data;
+  }
+
+  async importTrading212CSV(
+    portfolioId: string,
+    file: File
+  ): Promise<Trading212ImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const { data } = await this.api.post<Trading212ImportResult>(
+      `/portfolios/${portfolioId}/trading212/import`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
     return data;
   }
 }
