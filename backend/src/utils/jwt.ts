@@ -40,3 +40,6 @@ export const verifyAccessToken = (token: string): TokenPayload => {
 export const verifyRefreshToken = (token: string): TokenPayload => {
   return jwt.verify(token, getJwtRefreshSecret()) as TokenPayload;
 };
+
+// Alias for backward compatibility
+export const verifyToken = verifyAccessToken;
