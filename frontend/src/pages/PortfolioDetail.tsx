@@ -373,6 +373,15 @@ const PortfolioDetail: React.FC = () => {
             {portfolio.description && <p>{portfolio.description}</p>}
           </div>
           <div className="header-actions">
+            {portfolio.exchange === 'trading212' && (
+              <button 
+                onClick={() => navigate(`/portfolios/${id}/trading212`)} 
+                className="btn-primary"
+                style={{ marginRight: '10px' }}
+              >
+                📊 View Trading212 Account
+              </button>
+            )}
             <button onClick={() => setShowImportForm(!showImportForm)} className="btn-success">
               📥 Import Trades
             </button>
