@@ -3,13 +3,13 @@ import { Trading212Transaction } from '../entities/Trading212Transaction';
 import { AppDataSource } from '../index';
 
 interface CSVRow {
-  'ID'?: string;
   'Action': string;
   'Time': string;
   'ISIN'?: string;
   'Ticker'?: string;
   'Name'?: string;
   'Notes'?: string;
+  'ID'?: string;
   'No. of shares'?: string;
   'Price / share'?: string;
   'Currency (Price / share)'?: string;
