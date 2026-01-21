@@ -24,7 +24,7 @@ export const authenticate = async (
       return res.status(401).json({ message: 'Invalid token' });
     }
 
-    req.userId = decoded.userId;
+    req.userId = parseInt(decoded.userId);
     next();
   } catch (error) {
     return res.status(401).json({ message: 'Authentication failed' });
