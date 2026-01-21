@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { Trading212ImportService } from '../services/Trading212ImportService';
-import { AppDataSource } from '../config/database';
+import { AppDataSource } from '../index';
 import { Portfolio } from '../entities/Portfolio';
 
 interface AuthRequest extends Request {
