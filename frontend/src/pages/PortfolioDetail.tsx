@@ -55,6 +55,30 @@ const CustomTooltip = ({ active, payload, currencySymbol }: any) => {
   return null;
 };
 
+interface Trading212Summary {
+  totalDeposits: number;
+  totalWithdrawals: number;
+  netDeposits: number;
+  interestOnCash: number;
+  cashback: number;
+  cardDebits: number;
+  currentBalance: number;
+  transactionsCount: number;
+}
+
+interface Trading212Transaction {
+  id: string;
+  action: string;
+  time: string;
+  ticker?: string;
+  name?: string;
+  shares?: number;
+  pricePerShare?: number;
+  totalAmount?: number;
+  totalCurrency?: string;
+  notes?: string;
+}
+
 const PortfolioDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -63,6 +87,8 @@ const PortfolioDetail: React.FC = () => {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [simpleBalances, setSimpleBalances] = useState<BalanceResponse | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [trading212Summary, setTrading212Summary] = useState<Trading212Summary | null>(null);
+  const [trading212Transactions, setTrading212Transactions] = useState<Trading212Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showTradeForm, setShowTradeForm] = useState(false);
@@ -83,6 +109,7 @@ const PortfolioDetail: React.FC = () => {
   const [importing, setImporting] = useState(false);
 
   const isSimpleBalanceView = portfolio?.exchange === 'revolutx';
+  const isTrading212 = portfolio?.exchange === 'trading212';
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -104,6 +131,13 @@ const PortfolioDetail: React.FC = () => {
       if (portfolioData.exchange === 'revolutx') {
         const balancesData = await apiService.getPortfolioBalances(id!);
         setSimpleBalances(balancesData);
+      } else if (portfolioData.exchange === 'trading212') {
+        const [summaryData, transactionsData] = await Promise.all([
+          apiService.getTrading212Summary(id!),
+          apiService.getTrading212Transactions(id!, 50, 0)
+        ]);
+        setTrading212Summary(summaryData);
+        setTrading212Transactions(transactionsData.transactions);
       } else {
         const [holdingsData, tradesData] = await Promise.all([
           apiService.getPortfolioHoldings(id!),
@@ -178,12 +212,34 @@ const PortfolioDetail: React.FC = () => {
     }
   };
 
+  const handleTrading212Import = async (file: File) => {
+    setImporting(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const result = await apiService.importTrading212CSV(id!, file);
+      setSuccessMessage(
+        `✅ Import successful!\n` +
+        `Imported: ${result.imported}\n` +
+        `Updated: ${result.updated}\n` +
+        `Duplicates: ${result.duplicates}`
+      );
+      await fetchPortfolioData();
+    } catch (err: any) {
+      const errorMsg = err.message || 'Import failed. Please check the CSV format.';
+      setError(errorMsg);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleRefreshPrices = async () => {
     try {
       setError(null);
       setSuccessMessage(null);
       
-      if (isSimpleBalanceView) {
+      if (isSimpleBalanceView || isTrading212) {
         await fetchPortfolioData();
       } else {
         await apiService.refreshPortfolio(id!);
@@ -195,6 +251,25 @@ const PortfolioDetail: React.FC = () => {
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to refresh prices');
     }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('pt-PT', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getActionColor = (action: string) => {
+    if (action.includes('Deposit')) return 'positive';
+    if (action.includes('Withdrawal') || action.includes('Card debit')) return 'negative';
+    if (action.includes('Interest') || action.includes('cashback')) return 'info';
+    if (action.includes('buy')) return 'positive';
+    if (action.includes('sell')) return 'negative';
+    return '';
   };
 
   if (loading) {
@@ -223,7 +298,117 @@ const PortfolioDetail: React.FC = () => {
     );
   }
 
-  const currencySymbol = portfolio.exchange === 'revolutx' ? '€' : '$';
+  const currencySymbol = portfolio.exchange === 'revolutx' || portfolio.exchange === 'trading212' ? '€' : '$';
+
+  // TRADING212 VIEW
+  if (isTrading212 && trading212Summary) {
+    return (
+      <Layout>
+        <div className="portfolio-detail">
+          <div className="page-header">
+            <div>
+              <h1>{portfolio.name}</h1>
+              {portfolio.description && <p>{portfolio.description}</p>}
+              <span className="badge-info">Trading212 Account</span>
+            </div>
+            <div className="header-actions">
+              <label className="btn-primary" style={{ cursor: 'pointer' }}>
+                📥 Import CSV
+                <input
+                  type="file"
+                  accept=".csv"
+                  style={{ display: 'none' }}
+                  onChange={(e) => e.target.files?.[0] && handleTrading212Import(e.target.files[0])}
+                  disabled={importing}
+                />
+              </label>
+              <button onClick={handleRefreshPrices} className="btn-secondary">
+                🔄 Refresh
+              </button>
+            </div>
+          </div>
+
+          {successMessage && (
+            <div className="success-message">{successMessage}</div>
+          )}
+
+          {error && (
+            <div className="error-message">{error}</div>
+          )}
+
+          <div className="stats-grid">
+            <div className="stat-card">
+              <h3>Current Balance</h3>
+              <p className="stat-value">{currencySymbol}{formatNumber(trading212Summary.currentBalance)}</p>
+            </div>
+            <div className="stat-card">
+              <h3>Net Deposits</h3>
+              <p className="stat-value">{currencySymbol}{formatNumber(trading212Summary.netDeposits)}</p>
+            </div>
+            <div className="stat-card">
+              <h3>Interest on Cash</h3>
+              <p className="stat-value positive">{currencySymbol}{formatNumber(trading212Summary.interestOnCash)}</p>
+            </div>
+            <div className="stat-card">
+              <h3>Cashback</h3>
+              <p className="stat-value positive">{currencySymbol}{formatNumber(trading212Summary.cashback)}</p>
+            </div>
+          </div>
+
+          <div className="trades-section">
+            <h2>Recent Transactions</h2>
+
+            {trading212Transactions.length === 0 ? (
+              <div className="trades-table">
+                <p style={{ padding: '20px', textAlign: 'center' }}>No transactions yet. Import your Trading212 CSV to get started.</p>
+              </div>
+            ) : (
+              <div className="trades-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Action</th>
+                      <th>Asset</th>
+                      <th>Shares</th>
+                      <th>Price</th>
+                      <th>Total</th>
+                      <th>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trading212Transactions.map((tx) => (
+                      <tr key={tx.id}>
+                        <td>{formatDate(tx.time)}</td>
+                        <td className={getActionColor(tx.action)}>
+                          <strong>{tx.action}</strong>
+                        </td>
+                        <td>
+                          {tx.ticker ? (
+                            <div>
+                              <strong>{tx.ticker}</strong>
+                              <br />
+                              <small style={{ color: 'var(--text-secondary)' }}>{tx.name}</small>
+                            </div>
+                          ) : (
+                            '-'
+                          )}
+                        </td>
+                        <td>{tx.shares ? tx.shares.toFixed(4) : '-'}</td>
+                        <td>{tx.pricePerShare ? currencySymbol + formatNumber(tx.pricePerShare) : '-'}</td>
+                        <td><strong>{currencySymbol}{formatNumber(tx.totalAmount)}</strong></td>
+                        <td><small>{tx.notes || '-'}</small></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   // SIMPLE BALANCE VIEW (for Revolut X)
   if (isSimpleBalanceView && simpleBalances) {
@@ -373,15 +558,6 @@ const PortfolioDetail: React.FC = () => {
             {portfolio.description && <p>{portfolio.description}</p>}
           </div>
           <div className="header-actions">
-            {portfolio.exchange === 'trading212' && (
-              <button 
-                onClick={() => navigate(`/portfolios/${id}/trading212`)} 
-                className="btn-primary"
-                style={{ marginRight: '10px' }}
-              >
-                📊 View Trading212 Account
-              </button>
-            )}
             <button onClick={() => setShowImportForm(!showImportForm)} className="btn-success">
               📥 Import Trades
             </button>
