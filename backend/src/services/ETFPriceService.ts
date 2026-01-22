@@ -11,9 +11,22 @@ export class ETFPriceService {
   private cache: Map<string, { price: number; timestamp: number; currency: string }> = new Map();
   private CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+  // Common European exchange suffixes to try
+  private readonly EXCHANGE_SUFFIXES = [
+    '',      // Try without suffix first
+    '.MI',   // Milan (Borsa Italiana)
+    '.L',    // London Stock Exchange
+    '.AS',   // Amsterdam (Euronext)
+    '.PA',   // Paris (Euronext)
+    '.DE',   // XETRA (Germany)
+    '.SW',   // SIX Swiss Exchange
+    '.MC',   // Madrid
+  ];
+
   /**
    * Get current price for a ticker symbol
    * Uses Yahoo Finance API (free, no API key required)
+   * Automatically tries European exchange suffixes if base ticker fails
    */
   async getPrice(ticker: string): Promise<{ price: number; currency: string } | null> {
     try {
@@ -23,7 +36,34 @@ export class ETFPriceService {
         return { price: cached.price, currency: cached.currency };
       }
 
-      // Yahoo Finance doesn't need API key for basic quotes
+      // Try ticker as-is first, then with exchange suffixes
+      const tickersToTry = ticker.includes('.')
+        ? [ticker] // Already has suffix, don't modify
+        : this.EXCHANGE_SUFFIXES.map(suffix => ticker + suffix);
+
+      for (const tryTicker of tickersToTry) {
+        const result = await this.fetchPrice(tryTicker);
+        if (result) {
+          // Cache using original ticker name
+          this.cache.set(ticker, { ...result, timestamp: Date.now() });
+          console.log(`[ETF Price] ${ticker} -> ${tryTicker}: ${result.price} ${result.currency}`);
+          return result;
+        }
+      }
+
+      console.warn(`[ETF Price] No data found for ${ticker} (tried ${tickersToTry.length} variations)`);
+      return null;
+    } catch (error) {
+      console.error(`[ETF Price] Unexpected error for ${ticker}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Fetch price for a specific ticker from Yahoo Finance
+   */
+  private async fetchPrice(ticker: string): Promise<{ price: number; currency: string } | null> {
+    try {
       const response = await axios.get(
         `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`,
         {
@@ -40,7 +80,6 @@ export class ETFPriceService {
 
       const result = response.data?.chart?.result?.[0];
       if (!result || !result.meta) {
-        console.warn(`[ETF Price] No data found for ${ticker}`);
         return null;
       }
 
@@ -48,21 +87,12 @@ export class ETFPriceService {
       const currency = result.meta.currency || 'USD';
 
       if (!price || isNaN(price)) {
-        console.warn(`[ETF Price] Invalid price for ${ticker}`);
         return null;
       }
 
-      // Cache the result
-      this.cache.set(ticker, { price, currency, timestamp: Date.now() });
-
-      console.log(`[ETF Price] ${ticker}: ${price} ${currency}`);
       return { price, currency };
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        console.error(`[ETF Price] Failed to fetch ${ticker}:`, error.message);
-      } else {
-        console.error(`[ETF Price] Unexpected error for ${ticker}:`, error);
-      }
+      // Silently fail for individual ticker attempts
       return null;
     }
   }
