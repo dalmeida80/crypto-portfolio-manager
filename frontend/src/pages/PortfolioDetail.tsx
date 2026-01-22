@@ -231,6 +231,9 @@ const PortfolioDetail: React.FC = () => {
         `Synced ${result.synced} assets from Binance (Spot + Earn + Savings)\n` +
         `Assets: ${result.assets.join(', ')}`
       );
+      
+      // Auto-refresh prices after sync
+      await apiService.refreshPortfolio(id!);
       await fetchPortfolioData();
     } catch (err: any) {
       const errorMsg = err.response?.data?.message || err.message || 'Failed to sync holdings';
@@ -326,7 +329,7 @@ const PortfolioDetail: React.FC = () => {
     );
   }
 
-  const currencySymbol = portfolio.exchange === 'revolutx' || portfolio.exchange === 'trading212' ? '€' : '$';
+  const currencySymbol = portfolio.exchange === 'revolutx' || portfolio.exchange === 'trading212' ? '€' : '€';
 
   // TRADING212 VIEW
   if (isTrading212 && trading212Summary && trading212Totals) {
