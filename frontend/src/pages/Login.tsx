@@ -29,7 +29,7 @@ const Login: React.FC = () => {
   return (
     <div className="auth-container">
       <div className="auth-card">
-        <h1>Crypto Portfolio Manager</h1>
+        <h1>Personal Portfolio Manager</h1>
         <h2>Login</h2>
         
         {error && <div className="error-message">{error}</div>}
