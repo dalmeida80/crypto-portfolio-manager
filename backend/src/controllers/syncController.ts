@@ -26,16 +26,18 @@ export const syncBinanceTrades = async (req: AuthRequest, res: Response): Promis
   }
 };
 
+/**
+ * Get portfolio analytics with EUR conversion
+ * Calculates holdings, P/L, and converts all values to EUR
+ */
 export const getPortfolioAnalytics = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.userId;
     const { portfolioId } = req.params;
-    const { apiKeyId } = req.query;
 
     const analytics = await AnalyticsService.calculatePortfolioMetrics(
       portfolioId,
-      userId,
-      apiKeyId as string | undefined
+      userId
     );
 
     res.json(analytics);
