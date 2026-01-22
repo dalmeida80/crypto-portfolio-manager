@@ -6,7 +6,8 @@ import {
   getBalances,
   importAllTrades,
   importRevolutXCsv,
-  getImportStatus
+  getImportStatus,
+  syncBinanceHoldings
 } from '../controllers/exchangeController';
 import { authenticate } from '../middleware/auth';
 
@@ -22,5 +23,8 @@ router.get('/api-keys/:apiKeyId/balances', authenticate, getBalances);
 router.post('/portfolios/:portfolioId/import-all', authenticate, importAllTrades);
 router.post('/portfolios/:portfolioId/import-csv', authenticate, importRevolutXCsv);
 router.get('/portfolios/:portfolioId/import-status', authenticate, getImportStatus);
+
+// Binance holdings sync
+router.post('/portfolios/:portfolioId/sync-holdings', authenticate, syncBinanceHoldings);
 
 export default router;
