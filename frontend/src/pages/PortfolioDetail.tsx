@@ -306,7 +306,7 @@ const PortfolioDetail: React.FC = () => {
 
   const currencySymbol = portfolio.exchange === 'revolutx' || portfolio.exchange === 'trading212' ? '€' : '$';
 
-  // TRADING212 VIEW
+  // TRADING212 VIEW - REORGANIZED: Holdings first, then 3+3 cards
   if (isTrading212 && trading212Summary && trading212Totals) {
     return (
       <Layout>
@@ -342,51 +342,7 @@ const PortfolioDetail: React.FC = () => {
             <div className="error-message">{error}</div>
           )}
 
-          {/* Cash Summary */}
-          <div className="stats-grid">
-            <div className="stat-card">
-              <h3>Cash Balance</h3>
-              <p className="stat-value">{currencySymbol}{formatNumber(trading212Summary.currentBalance)}</p>
-              <p className="stat-hint">Available cash</p>
-            </div>
-            <div className="stat-card">
-              <h3>Net Deposits</h3>
-              <p className="stat-value">{currencySymbol}{formatNumber(trading212Summary.netDeposits)}</p>
-              <p className="stat-hint">Total deposits - withdrawals</p>
-            </div>
-            <div className="stat-card">
-              <h3>Interest + Cashback</h3>
-              <p className="stat-value positive">
-                {currencySymbol}{formatNumber(trading212Summary.interestOnCash + trading212Summary.cashback)}
-              </p>
-              <p className="stat-hint">Earnings from interest and cashback</p>
-            </div>
-          </div>
-
-          {/* Holdings P&L Summary */}
-          <div className="stats-grid" style={{ marginTop: '1rem' }}>
-            <div className="stat-card">
-              <h3>Total Invested</h3>
-              <p className="stat-value">{currencySymbol}{formatNumber(trading212Totals.totalInvested)}</p>
-              <p className="stat-hint">{trading212Totals.holdingsCount} positions</p>
-            </div>
-            <div className="stat-card">
-              <h3>Current Value</h3>
-              <p className="stat-value">{currencySymbol}{formatNumber(trading212Totals.totalCurrentValue)}</p>
-              <p className="stat-hint">{trading212Totals.holdingsWithPrices} with live prices</p>
-            </div>
-            <div className="stat-card">
-              <h3>Profit/Loss</h3>
-              <p className={`stat-value ${trading212Totals.profitLoss >= 0 ? 'positive' : 'negative'}`}>
-                {currencySymbol}{formatNumber(trading212Totals.profitLoss)}
-                <span className="percentage">
-                  ({trading212Totals.profitLossPercentage >= 0 ? '+' : ''}{formatNumber(trading212Totals.profitLossPercentage)}%)
-                </span>
-              </p>
-            </div>
-          </div>
-
-          {/* Holdings Table */}
+          {/* Holdings Table - NOW FIRST */}
           <div className="holdings-section">
             <div className="section-header">
               <h2>Current Holdings</h2>
@@ -447,6 +403,52 @@ const PortfolioDetail: React.FC = () => {
                 </table>
               </div>
             )}
+          </div>
+
+          {/* 6 Cards in 3+3 Grid - Cash Summary (3 cards) */}
+          <h2 style={{ marginTop: '2rem', marginBottom: '1rem' }}>Cash Summary</h2>
+          <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+            <div className="stat-card">
+              <h3>Cash Balance</h3>
+              <p className="stat-value">{currencySymbol}{formatNumber(trading212Summary.currentBalance)}</p>
+              <p className="stat-hint">Available cash</p>
+            </div>
+            <div className="stat-card">
+              <h3>Net Deposits</h3>
+              <p className="stat-value">{currencySymbol}{formatNumber(trading212Summary.netDeposits)}</p>
+              <p className="stat-hint">Total deposits - withdrawals</p>
+            </div>
+            <div className="stat-card">
+              <h3>Interest + Cashback</h3>
+              <p className="stat-value positive">
+                {currencySymbol}{formatNumber(trading212Summary.interestOnCash + trading212Summary.cashback)}
+              </p>
+              <p className="stat-hint">Earnings from interest and cashback</p>
+            </div>
+          </div>
+
+          {/* Holdings P&L Summary (3 cards) */}
+          <h2 style={{ marginTop: '2rem', marginBottom: '1rem' }}>Holdings Performance</h2>
+          <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+            <div className="stat-card">
+              <h3>Total Invested</h3>
+              <p className="stat-value">{currencySymbol}{formatNumber(trading212Totals.totalInvested)}</p>
+              <p className="stat-hint">{trading212Totals.holdingsCount} positions</p>
+            </div>
+            <div className="stat-card">
+              <h3>Current Value</h3>
+              <p className="stat-value">{currencySymbol}{formatNumber(trading212Totals.totalCurrentValue)}</p>
+              <p className="stat-hint">{trading212Totals.holdingsWithPrices} with live prices</p>
+            </div>
+            <div className="stat-card">
+              <h3>Profit/Loss</h3>
+              <p className={`stat-value ${trading212Totals.profitLoss >= 0 ? 'positive' : 'negative'}`}>
+                {currencySymbol}{formatNumber(trading212Totals.profitLoss)}
+                <span className="percentage">
+                  ({trading212Totals.profitLossPercentage >= 0 ? '+' : ''}{formatNumber(trading212Totals.profitLossPercentage)}%)
+                </span>
+              </p>
+            </div>
           </div>
 
           {/* Transactions Table */}
