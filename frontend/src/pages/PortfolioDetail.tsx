@@ -109,9 +109,11 @@ const PortfolioDetail: React.FC = () => {
     startDate: '',
   });
   const [importing, setImporting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const isSimpleBalanceView = portfolio?.exchange === 'revolutx';
   const isTrading212 = portfolio?.exchange === 'trading212';
+  const isBinance = portfolio?.exchange === 'binance' || (!portfolio?.exchange && !isSimpleBalanceView && !isTrading212);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -218,6 +220,27 @@ const PortfolioDetail: React.FC = () => {
     }
   };
 
+  const handleSyncHoldings = async () => {
+    setSyncing(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const result = await apiService.syncBinanceHoldings(id!);
+      setSuccessMessage(
+        `✅ Holdings synced!\n` +
+        `Synced ${result.synced} assets from Binance (Spot + Earn + Savings)\n` +
+        `Assets: ${result.assets.join(', ')}`
+      );
+      await fetchPortfolioData();
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.message || err.message || 'Failed to sync holdings';
+      setError(errorMsg);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const handleTrading212Import = async (file: File) => {
     setImporting(true);
     setError(null);
@@ -306,7 +329,7 @@ const PortfolioDetail: React.FC = () => {
 
   const currencySymbol = portfolio.exchange === 'revolutx' || portfolio.exchange === 'trading212' ? '€' : '$';
 
-  // TRADING212 VIEW - REORGANIZED: Holdings first, then 3+3 cards
+  // TRADING212 VIEW - keeping existing code
   if (isTrading212 && trading212Summary && trading212Totals) {
     return (
       <Layout>
@@ -639,7 +662,7 @@ const PortfolioDetail: React.FC = () => {
     );
   }
 
-  // FULL VIEW (for other portfolios with P/L tracking) - keeping existing code
+  // FULL VIEW (for Binance and other portfolios with P/L tracking)
   const profitLoss = portfolio.profitLoss ?? 0;
   const totalInvested = portfolio.totalInvested ?? 0;
   const profitLossPercentage = totalInvested > 0
@@ -655,6 +678,15 @@ const PortfolioDetail: React.FC = () => {
             {portfolio.description && <p>{portfolio.description}</p>}
           </div>
           <div className="header-actions">
+            {isBinance && (
+              <button 
+                onClick={handleSyncHoldings} 
+                className="btn-info"
+                disabled={syncing}
+              >
+                {syncing ? '⏳ Syncing...' : '🔄 Sync Holdings'}
+              </button>
+            )}
             <button onClick={() => setShowImportForm(!showImportForm)} className="btn-success">
               📥 Import Trades
             </button>
@@ -669,6 +701,10 @@ const PortfolioDetail: React.FC = () => {
 
         {successMessage && (
           <div className="success-message">{successMessage}</div>
+        )}
+
+        {error && (
+          <div className="error-message">{error}</div>
         )}
 
         {showImportForm && (
