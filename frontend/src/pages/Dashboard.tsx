@@ -87,7 +87,7 @@ const Dashboard: React.FC = () => {
     ? ((totals.profitLoss / totals.totalInvested) * 100).toFixed(2)
     : '0.00';
 
-  const hasEurPortfolio = portfolios.some(p => p.exchange === 'revolutx' || p.exchange === 'trading212');
+  const hasEurPortfolio = portfolios.some(p => p.exchange === 'revolutx' || p.exchange === 'trading212' || p.exchange === 'binance');
   const currencySymbol = hasEurPortfolio ? '€' : '$';
 
   if (loading) {
@@ -163,7 +163,8 @@ const Dashboard: React.FC = () => {
               {portfolios.map((portfolio) => {
                 const isSimpleView = portfolio.exchange === 'revolutx';
                 const isTrading212 = portfolio.exchange === 'trading212';
-                const portfolioCurrency = (isSimpleView || isTrading212) ? '€' : '$';
+		const isBinance = portfolio.exchange === 'binance';
+                const portfolioCurrency = (isSimpleView || isTrading212 || isBinance) ? '€' : '$';
                 const portfolioPL = portfolio.profitLoss || 0;
                 const portfolioInvested = portfolio.totalInvested || 0;
                 const portfolioPLPercent = portfolioInvested > 0 
