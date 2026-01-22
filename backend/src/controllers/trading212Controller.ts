@@ -120,4 +120,60 @@ export class Trading212Controller {
       });
     }
   };
+
+  getHoldings = async (req: AuthRequest, res: Response) => {
+    try {
+      console.log('[Trading212] Get holdings request');
+      const { portfolioId } = req.params;
+      const userId = req.userId;
+
+      const portfolio = await this.portfolioRepo.findOne({
+        where: { id: portfolioId, userId }
+      });
+
+      if (!portfolio) {
+        console.error(`[Trading212] Portfolio not found for holdings: ${portfolioId}`);
+        return res.status(404).json({ error: 'Portfolio not found' });
+      }
+
+      console.log('[Trading212] Fetching holdings...');
+      const holdings = await this.importService.getHoldings(portfolioId);
+      console.log(`[Trading212] Found ${holdings.length} holdings`);
+      res.json(holdings);
+    } catch (error) {
+      console.error('[Trading212] Holdings error:', error);
+      res.status(500).json({ 
+        error: 'Failed to get holdings',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
+
+  getTotals = async (req: AuthRequest, res: Response) => {
+    try {
+      console.log('[Trading212] Get totals request');
+      const { portfolioId } = req.params;
+      const userId = req.userId;
+
+      const portfolio = await this.portfolioRepo.findOne({
+        where: { id: portfolioId, userId }
+      });
+
+      if (!portfolio) {
+        console.error(`[Trading212] Portfolio not found for totals: ${portfolioId}`);
+        return res.status(404).json({ error: 'Portfolio not found' });
+      }
+
+      console.log('[Trading212] Calculating totals...');
+      const totals = await this.importService.getPortfolioTotals(portfolioId);
+      console.log(`[Trading212] Totals: ${JSON.stringify(totals)}`);
+      res.json(totals);
+    } catch (error) {
+      console.error('[Trading212] Totals error:', error);
+      res.status(500).json({ 
+        error: 'Failed to get totals',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  };
 }
