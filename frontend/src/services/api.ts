@@ -347,9 +347,9 @@ class ApiService {
     return data;
   }
 
-  // Portfolio update methods
-  async refreshPortfolio(portfolioId: string): Promise<Portfolio> {
-    const { data } = await this.api.post<Portfolio>(`/prices/portfolio/${portfolioId}/refresh`);
+  // Portfolio update methods - NOW USES ANALYTICS WITH EUR CONVERSION
+  async refreshPortfolio(portfolioId: string): Promise<any> {
+    const { data } = await this.api.get(`/portfolios/${portfolioId}/analytics`);
     return data;
   }
 
