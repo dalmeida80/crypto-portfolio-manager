@@ -67,14 +67,15 @@ export class BinanceHoldingsService {
     for (const apiKey of apiKeys) {
       try {
         // Fetch all holdings from different Binance products
-        const [spotBalances, earnBalances, savingsBalances] = await Promise.all([
+        const [spotBalances, earnBalances] = await Promise.all([
           this.getSpotBalances(apiKey.apiKey, apiKey.apiSecret),
-          this.getSimpleEarnBalances(apiKey.apiKey, apiKey.apiSecret),
-          this.getSavingsBalances(apiKey.apiKey, apiKey.apiSecret)
+          this.getEarnBalances(apiKey.apiKey, apiKey.apiSecret)
         ]);
 
         // Combine all balances
-        const combinedBalances = this.combineBalances(spotBalances, earnBalances, savingsBalances);
+        const combinedBalances = this.combineBalances(spotBalances, earnBalances);
+
+        console.log('[Binance Sync] Combined balances:', combinedBalances);
 
         // Delete existing holdings sync trades
         await tradeRepo.delete({
@@ -145,6 +146,7 @@ export class BinanceHoldingsService {
         }
       }
 
+      console.log('[Binance Sync] Spot balances:', Object.keys(balances).length, 'assets');
       return balances;
     } catch (error: any) {
       console.error('Error fetching Spot balances:', error.message);
@@ -153,71 +155,82 @@ export class BinanceHoldingsService {
   }
 
   /**
-   * Get Simple Earn (Flexible) balances
+   * Get all Earn balances (Flexible + Locked)
    */
-  private async getSimpleEarnBalances(apiKey: string, apiSecret: string): Promise<Record<string, number>> {
+  private async getEarnBalances(apiKey: string, apiSecret: string): Promise<Record<string, number>> {
+    const balances: Record<string, number> = {};
+
+    // Try Simple Earn Account (newest API)
     try {
       const timestamp = Date.now();
       const queryString = `timestamp=${timestamp}`;
       const signature = crypto.createHmac('sha256', apiSecret).update(queryString).digest('hex');
 
       const response = await axios.get(
-        `${this.baseUrl}/sapi/v1/simple-earn/flexible/position?${queryString}&signature=${signature}`,
+        `${this.baseUrl}/sapi/v1/simple-earn/account?${queryString}&signature=${signature}`,
         {
           headers: { 'X-MBX-APIKEY': apiKey },
           timeout: 10000
         }
       );
 
-      const balances: Record<string, number> = {};
-      const positions = response.data.rows || [];
-      
-      for (const position of positions) {
-        const amount = parseFloat(position.totalAmount || '0');
-        if (amount > 0) {
-          balances[position.asset] = amount;
+      // Flexible products
+      if (response.data.totalFlexibleAmountInBTC) {
+        const flexibleAssets = response.data.totalFlexibleAmountInBTC || [];
+        for (const item of flexibleAssets) {
+          const amount = parseFloat(item.totalAmount || '0');
+          if (amount > 0) {
+            balances[item.asset] = (balances[item.asset] || 0) + amount;
+          }
         }
       }
 
-      return balances;
-    } catch (error: any) {
-      console.warn('Simple Earn not available or error:', error.message);
-      return {};
-    }
-  }
-
-  /**
-   * Get Savings balances (legacy)
-   */
-  private async getSavingsBalances(apiKey: string, apiSecret: string): Promise<Record<string, number>> {
-    try {
-      const timestamp = Date.now();
-      const queryString = `timestamp=${timestamp}`;
-      const signature = crypto.createHmac('sha256', apiSecret).update(queryString).digest('hex');
-
-      const response = await axios.get(
-        `${this.baseUrl}/sapi/v1/lending/union/account?${queryString}&signature=${signature}`,
-        {
-          headers: { 'X-MBX-APIKEY': apiKey },
-          timeout: 10000
-        }
-      );
-
-      const balances: Record<string, number> = {};
-      const positions = response.data.positionAmountVos || [];
-      
-      for (const position of positions) {
-        const amount = parseFloat(position.amount || '0');
-        if (amount > 0) {
-          balances[position.asset] = amount;
+      // Locked products
+      if (response.data.totalLockedInBTC) {
+        const lockedAssets = response.data.totalLockedInBTC || [];
+        for (const item of lockedAssets) {
+          const amount = parseFloat(item.totalAmount || '0');
+          if (amount > 0) {
+            balances[item.asset] = (balances[item.asset] || 0) + amount;
+          }
         }
       }
 
-      return balances;
+      console.log('[Binance Sync] Earn (Simple Earn Account):', Object.keys(balances).length, 'assets');
     } catch (error: any) {
-      console.warn('Savings not available or error:', error.message);
-      return {};
+      console.warn('Simple Earn Account not available:', error.response?.data?.msg || error.message);
     }
+
+    // Fallback: Try Flexible Products List
+    if (Object.keys(balances).length === 0) {
+      try {
+        const timestamp = Date.now();
+        const queryString = `timestamp=${timestamp}`;
+        const signature = crypto.createHmac('sha256', apiSecret).update(queryString).digest('hex');
+
+        const response = await axios.get(
+          `${this.baseUrl}/sapi/v1/simple-earn/flexible/position?${queryString}&signature=${signature}`,
+          {
+            headers: { 'X-MBX-APIKEY': apiKey },
+            timeout: 10000
+          }
+        );
+
+        const positions = response.data.rows || [];
+        for (const position of positions) {
+          const amount = parseFloat(position.totalAmount || '0');
+          if (amount > 0) {
+            balances[position.asset] = (balances[position.asset] || 0) + amount;
+          }
+        }
+
+        console.log('[Binance Sync] Earn (Flexible Position):', Object.keys(balances).length, 'assets');
+      } catch (error: any) {
+        console.warn('Flexible Position not available:', error.response?.data?.msg || error.message);
+      }
+    }
+
+    return balances;
   }
 
   /**
@@ -225,18 +238,12 @@ export class BinanceHoldingsService {
    */
   private combineBalances(
     spot: Record<string, number>,
-    earn: Record<string, number>,
-    savings: Record<string, number>
+    earn: Record<string, number>
   ): Record<string, number> {
     const combined: Record<string, number> = { ...spot };
 
     // Add Earn balances
     for (const [asset, amount] of Object.entries(earn)) {
-      combined[asset] = (combined[asset] || 0) + amount;
-    }
-
-    // Add Savings balances
-    for (const [asset, amount] of Object.entries(savings)) {
       combined[asset] = (combined[asset] || 0) + amount;
     }
 
