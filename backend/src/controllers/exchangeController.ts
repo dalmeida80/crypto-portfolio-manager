@@ -8,8 +8,10 @@ import { BinanceService } from '../services/binanceService';
 import { RevolutXService } from '../services/revolutXService';
 import { TradeImportService } from '../services/tradeImportService';
 import { RevolutXCsvParser } from '../services/revolutXCsvParser';
+import { BinanceHoldingsService } from '../services/BinanceHoldingsService';
 
 const tradeImportService = new TradeImportService();
+const binanceHoldingsService = new BinanceHoldingsService();
 
 export const addApiKey = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -181,6 +183,27 @@ export const importAllTrades = async (req: AuthRequest, res: Response): Promise<
     console.error('Import all trades error:', error);
     res.status(500).json({ 
       error: 'Failed to import trades',
+      message: error.message 
+    });
+  }
+};
+
+/**
+ * Sync current Binance holdings to portfolio
+ * Creates synthetic trades to reflect current balances (Spot, Earn, Savings)
+ */
+export const syncBinanceHoldings = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.userId;
+    const { portfolioId } = req.params;
+
+    const result = await binanceHoldingsService.syncHoldings(portfolioId, userId);
+
+    res.json(result);
+  } catch (error: any) {
+    console.error('Sync Binance holdings error:', error);
+    res.status(500).json({ 
+      error: 'Failed to sync holdings',
       message: error.message 
     });
   }
