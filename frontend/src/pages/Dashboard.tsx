@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { Portfolio } from '../types';
-import apiService, { BalanceResponse } from '../services/api';
+import apiService, { BalanceResponse, Trading212Totals } from '../services/api';
 import '../styles/modern-dashboard.css';
 
 interface PortfolioWithBalance extends Portfolio {
   balanceData?: BalanceResponse;
+  trading212Totals?: Trading212Totals;
 }
 
 const Dashboard: React.FC = () => {
@@ -41,6 +42,20 @@ const Dashboard: React.FC = () => {
               console.error(`Failed to load balance for ${portfolio.name}:`, err);
               return portfolio;
             }
+          } else if (portfolio.exchange === 'trading212') {
+            try {
+              const trading212Totals = await apiService.getTrading212Totals(portfolio.id);
+              return {
+                ...portfolio,
+                trading212Totals,
+                currentValue: trading212Totals.totalCurrentValue,
+                totalInvested: trading212Totals.totalInvested,
+                profitLoss: trading212Totals.profitLoss
+              };
+            } catch (err) {
+              console.error(`Failed to load Trading212 totals for ${portfolio.name}:`, err);
+              return portfolio;
+            }
           }
           return portfolio;
         })
@@ -72,7 +87,7 @@ const Dashboard: React.FC = () => {
     ? ((totals.profitLoss / totals.totalInvested) * 100).toFixed(2)
     : '0.00';
 
-  const hasEurPortfolio = portfolios.some(p => p.exchange === 'revolutx');
+  const hasEurPortfolio = portfolios.some(p => p.exchange === 'revolutx' || p.exchange === 'trading212');
   const currencySymbol = hasEurPortfolio ? '€' : '$';
 
   if (loading) {
@@ -95,7 +110,7 @@ const Dashboard: React.FC = () => {
         <div className="hero-section">
           <div className="hero-content">
             <h1 className="hero-title">
-              <span className="gradient-text">Your Crypto</span>
+              <span className="gradient-text">Your Personal</span>
               <br />
               Portfolio
             </h1>
@@ -138,7 +153,7 @@ const Dashboard: React.FC = () => {
             <div className="empty-state glass-card">
               <div className="empty-icon">📊</div>
               <h3>No Portfolios Yet</h3>
-              <p>Create your first portfolio to start tracking your crypto investments</p>
+              <p>Create your first portfolio to start tracking your investments</p>
               <button onClick={() => navigate('/portfolios')} className="create-btn">
                 <span>+</span> Create Portfolio
               </button>
@@ -147,12 +162,17 @@ const Dashboard: React.FC = () => {
             <div className="portfolios-grid">
               {portfolios.map((portfolio) => {
                 const isSimpleView = portfolio.exchange === 'revolutx';
-                const portfolioCurrency = isSimpleView ? '€' : '$';
+                const isTrading212 = portfolio.exchange === 'trading212';
+                const portfolioCurrency = (isSimpleView || isTrading212) ? '€' : '$';
                 const portfolioPL = portfolio.profitLoss || 0;
                 const portfolioInvested = portfolio.totalInvested || 0;
                 const portfolioPLPercent = portfolioInvested > 0 
                   ? ((portfolioPL / portfolioInvested) * 100).toFixed(2)
                   : '0.00';
+
+                let exchangeLabel = '🌐 ' + portfolio.exchange;
+                if (portfolio.exchange === 'revolutx') exchangeLabel = '🇪🇺 Revolut X';
+                if (portfolio.exchange === 'trading212') exchangeLabel = '📈 Trading212';
 
                 return (
                   <div key={portfolio.id} className="portfolio-card glass-card">
@@ -164,7 +184,7 @@ const Dashboard: React.FC = () => {
                           <p className="portfolio-description">{portfolio.description}</p>
                         )}
                         <div className="exchange-badge">
-                          {portfolio.exchange === 'revolutx' ? '🇪🇺 Revolut X' : '🌐 ' + portfolio.exchange}
+                          {exchangeLabel}
                         </div>
                       </div>
                     </div>
