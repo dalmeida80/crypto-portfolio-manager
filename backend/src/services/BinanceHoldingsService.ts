@@ -1,6 +1,6 @@
 import axios from 'axios';
 import crypto from 'crypto';
-import { AppDataSource } from '../config/database';
+import { AppDataSource } from '../index';
 import { Trade } from '../entities/Trade';
 import { Portfolio } from '../entities/Portfolio';
 import { ExchangeApiKey } from '../entities/ExchangeApiKey';
