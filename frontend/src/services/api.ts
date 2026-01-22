@@ -69,6 +69,13 @@ export interface ImportResult {
   message: string;
 }
 
+export interface SyncHoldingsResult {
+  success: boolean;
+  synced: number;
+  assets: string[];
+  message: string;
+}
+
 export interface ImportStatus {
   totalTrades: number;
   binanceTrades: number;
@@ -402,6 +409,13 @@ class ApiService {
     const { data } = await this.api.post(`/exchange/portfolios/${portfolioId}/import-all`, {
       startDate
     });
+    return data;
+  }
+
+  async syncBinanceHoldings(portfolioId: string): Promise<SyncHoldingsResult> {
+    const { data } = await this.api.post<SyncHoldingsResult>(
+      `/exchange/portfolios/${portfolioId}/sync-holdings`
+    );
     return data;
   }
 
