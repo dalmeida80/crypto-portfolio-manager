@@ -658,7 +658,7 @@ const PortfolioDetail: React.FC = () => {
     );
   }
 
-  // FULL VIEW (Binance and other portfolios) - SEMPRE MOSTRA SYNC HOLDINGS
+  // FULL VIEW (Binance) - Summary cards em EUR, tabela em USD
   const profitLoss = portfolio.profitLoss ?? 0;
   const totalInvested = portfolio.totalInvested ?? 0;
   const profitLossPercentage = totalInvested > 0
@@ -843,6 +843,7 @@ const PortfolioDetail: React.FC = () => {
           </div>
         )}
 
+        {/* Summary cards em EUR */}
         <div className="stats-grid">
           <div className="stat-card">
             <h3>Total Invested</h3>
@@ -863,6 +864,7 @@ const PortfolioDetail: React.FC = () => {
           </div>
         </div>
 
+        {/* Holdings table em USD */}
         <div className="holdings-section">
           <div className="section-header">
             <h2>Holdings</h2>
@@ -892,12 +894,12 @@ const PortfolioDetail: React.FC = () => {
                     <tr key={holding.symbol}>
                       <td><strong>{holding.symbol}</strong></td>
                       <td>{formatNumber(holding.quantity, 8)}</td>
-                      <td>{currencySymbol}{formatPrice(holding.averagePrice)}</td>
-                      <td className="current-price">{currencySymbol}{formatPrice(holding.currentPrice)}</td>
-                      <td>{currencySymbol}{formatNumber(holding.totalInvested)}</td>
-                      <td>{currencySymbol}{formatNumber(holding.currentValue)}</td>
+                      <td>${formatPrice(holding.averagePrice)}</td>
+                      <td className="current-price">${formatPrice(holding.currentPrice)}</td>
+                      <td>${formatNumber(holding.totalInvested)}</td>
+                      <td>${formatNumber(holding.currentValue)}</td>
                       <td className={(holding.profitLoss ?? 0) >= 0 ? 'positive' : 'negative'}>
-                        {currencySymbol}{formatNumber(holding.profitLoss)}
+                        ${formatNumber(holding.profitLoss)}
                       </td>
                       <td className={(holding.profitLossPercentage ?? 0) >= 0 ? 'positive' : 'negative'}>
                         {(holding.profitLossPercentage ?? 0) >= 0 ? '+' : ''}{formatNumber(holding.profitLossPercentage)}%
@@ -910,6 +912,7 @@ const PortfolioDetail: React.FC = () => {
           )}
         </div>
 
+        {/* Trade History em EUR */}
         <div className="trades-section">
           <h2>Trade History</h2>
 
