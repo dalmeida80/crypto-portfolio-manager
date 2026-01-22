@@ -20,7 +20,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     <div className="layout">
       <nav className="navbar">
         <div className="navbar-brand">
-          <Link to="/dashboard">Crypto Portfolio Manager</Link>
+          <Link to="/dashboard">Personal Portfolio Manager</Link>
         </div>
         <div className="navbar-menu">
           <Link to="/dashboard" className="navbar-item">Dashboard</Link>
