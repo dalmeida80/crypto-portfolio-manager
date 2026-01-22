@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Layout from '../components/Layout';
-import apiService, { BalanceResponse, SimpleHolding } from '../services/api';
+import apiService, { BalanceResponse, SimpleHolding, Trading212Holding, Trading212Totals } from '../services/api';
 import { Portfolio, Trade, Holding } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
@@ -89,6 +89,8 @@ const PortfolioDetail: React.FC = () => {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [trading212Summary, setTrading212Summary] = useState<Trading212Summary | null>(null);
   const [trading212Transactions, setTrading212Transactions] = useState<Trading212Transaction[]>([]);
+  const [trading212Holdings, setTrading212Holdings] = useState<Trading212Holding[]>([]);
+  const [trading212Totals, setTrading212Totals] = useState<Trading212Totals | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showTradeForm, setShowTradeForm] = useState(false);
@@ -132,12 +134,16 @@ const PortfolioDetail: React.FC = () => {
         const balancesData = await apiService.getPortfolioBalances(id!);
         setSimpleBalances(balancesData);
       } else if (portfolioData.exchange === 'trading212') {
-        const [summaryData, transactionsData] = await Promise.all([
+        const [summaryData, transactionsData, holdingsData, totalsData] = await Promise.all([
           apiService.getTrading212Summary(id!),
-          apiService.getTrading212Transactions(id!, 50, 0)
+          apiService.getTrading212Transactions(id!, 50, 0),
+          apiService.getTrading212Holdings(id!),
+          apiService.getTrading212Totals(id!)
         ]);
         setTrading212Summary(summaryData);
         setTrading212Transactions(transactionsData.transactions);
+        setTrading212Holdings(holdingsData);
+        setTrading212Totals(totalsData);
       } else {
         const [holdingsData, tradesData] = await Promise.all([
           apiService.getPortfolioHoldings(id!),
@@ -301,7 +307,7 @@ const PortfolioDetail: React.FC = () => {
   const currencySymbol = portfolio.exchange === 'revolutx' || portfolio.exchange === 'trading212' ? '€' : '$';
 
   // TRADING212 VIEW
-  if (isTrading212 && trading212Summary) {
+  if (isTrading212 && trading212Summary && trading212Totals) {
     return (
       <Layout>
         <div className="portfolio-detail">
@@ -323,7 +329,7 @@ const PortfolioDetail: React.FC = () => {
                 />
               </label>
               <button onClick={handleRefreshPrices} className="btn-secondary">
-                🔄 Refresh
+                🔄 Refresh Prices
               </button>
             </div>
           </div>
@@ -336,25 +342,114 @@ const PortfolioDetail: React.FC = () => {
             <div className="error-message">{error}</div>
           )}
 
+          {/* Cash Summary */}
           <div className="stats-grid">
             <div className="stat-card">
-              <h3>Current Balance</h3>
+              <h3>Cash Balance</h3>
               <p className="stat-value">{currencySymbol}{formatNumber(trading212Summary.currentBalance)}</p>
+              <p className="stat-hint">Available cash</p>
             </div>
             <div className="stat-card">
               <h3>Net Deposits</h3>
               <p className="stat-value">{currencySymbol}{formatNumber(trading212Summary.netDeposits)}</p>
+              <p className="stat-hint">Total deposits - withdrawals</p>
             </div>
             <div className="stat-card">
-              <h3>Interest on Cash</h3>
-              <p className="stat-value positive">{currencySymbol}{formatNumber(trading212Summary.interestOnCash)}</p>
-            </div>
-            <div className="stat-card">
-              <h3>Cashback</h3>
-              <p className="stat-value positive">{currencySymbol}{formatNumber(trading212Summary.cashback)}</p>
+              <h3>Interest + Cashback</h3>
+              <p className="stat-value positive">
+                {currencySymbol}{formatNumber(trading212Summary.interestOnCash + trading212Summary.cashback)}
+              </p>
+              <p className="stat-hint">Earnings from interest and cashback</p>
             </div>
           </div>
 
+          {/* Holdings P&L Summary */}
+          <div className="stats-grid" style={{ marginTop: '1rem' }}>
+            <div className="stat-card">
+              <h3>Total Invested</h3>
+              <p className="stat-value">{currencySymbol}{formatNumber(trading212Totals.totalInvested)}</p>
+              <p className="stat-hint">{trading212Totals.holdingsCount} positions</p>
+            </div>
+            <div className="stat-card">
+              <h3>Current Value</h3>
+              <p className="stat-value">{currencySymbol}{formatNumber(trading212Totals.totalCurrentValue)}</p>
+              <p className="stat-hint">{trading212Totals.holdingsWithPrices} with live prices</p>
+            </div>
+            <div className="stat-card">
+              <h3>Profit/Loss</h3>
+              <p className={`stat-value ${trading212Totals.profitLoss >= 0 ? 'positive' : 'negative'}`}>
+                {currencySymbol}{formatNumber(trading212Totals.profitLoss)}
+                <span className="percentage">
+                  ({trading212Totals.profitLossPercentage >= 0 ? '+' : ''}{formatNumber(trading212Totals.profitLossPercentage)}%)
+                </span>
+              </p>
+            </div>
+          </div>
+
+          {/* Holdings Table */}
+          <div className="holdings-section">
+            <div className="section-header">
+              <h2>Current Holdings</h2>
+            </div>
+
+            {trading212Holdings.length === 0 ? (
+              <div className="holdings-table">
+                <p style={{ padding: '20px', textAlign: 'center' }}>No holdings yet</p>
+              </div>
+            ) : (
+              <div className="holdings-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Asset</th>
+                      <th>Shares</th>
+                      <th>Avg Buy Price</th>
+                      <th>Current Price</th>
+                      <th>Invested</th>
+                      <th>Current Value</th>
+                      <th>Profit/Loss</th>
+                      <th>%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trading212Holdings.map((holding) => (
+                      <tr key={holding.ticker}>
+                        <td>
+                          <strong>{holding.ticker}</strong>
+                          <br />
+                          <small style={{ color: 'var(--text-secondary)' }}>{holding.name}</small>
+                        </td>
+                        <td>{formatNumber(holding.shares, 4)}</td>
+                        <td>{currencySymbol}{formatPrice(holding.averageBuyPrice)}</td>
+                        <td className="current-price">
+                          {holding.currentPrice ? currencySymbol + formatPrice(holding.currentPrice) : '-'}
+                        </td>
+                        <td>{currencySymbol}{formatNumber(holding.totalInvested)}</td>
+                        <td>
+                          {holding.currentValue ? (
+                            <strong>{currencySymbol}{formatNumber(holding.currentValue)}</strong>
+                          ) : (
+                            '-'
+                          )}
+                        </td>
+                        <td className={(holding.profitLoss ?? 0) >= 0 ? 'positive' : 'negative'}>
+                          {holding.profitLoss !== undefined ? currencySymbol + formatNumber(holding.profitLoss) : '-'}
+                        </td>
+                        <td className={(holding.profitLossPercentage ?? 0) >= 0 ? 'positive' : 'negative'}>
+                          {holding.profitLossPercentage !== undefined 
+                            ? `${holding.profitLossPercentage >= 0 ? '+' : ''}${formatNumber(holding.profitLossPercentage)}%` 
+                            : '-'
+                          }
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Transactions Table */}
           <div className="trades-section">
             <h2>Recent Transactions</h2>
 
@@ -410,7 +505,7 @@ const PortfolioDetail: React.FC = () => {
     );
   }
 
-  // SIMPLE BALANCE VIEW (for Revolut X)
+  // SIMPLE BALANCE VIEW (for Revolut X) - keeping existing code
   if (isSimpleBalanceView && simpleBalances) {
     const chartData = simpleBalances.holdings.map((holding, index) => ({
       name: holding.asset,
@@ -542,7 +637,7 @@ const PortfolioDetail: React.FC = () => {
     );
   }
 
-  // FULL VIEW (for other portfolios with P/L tracking)
+  // FULL VIEW (for other portfolios with P/L tracking) - keeping existing code
   const profitLoss = portfolio.profitLoss ?? 0;
   const totalInvested = portfolio.totalInvested ?? 0;
   const profitLossPercentage = totalInvested > 0
