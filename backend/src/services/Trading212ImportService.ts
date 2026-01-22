@@ -1,6 +1,7 @@
 import { parse } from 'csv-parse/sync';
 import { Trading212Transaction } from '../entities/Trading212Transaction';
 import { AppDataSource } from '../index';
+import { ETFPriceService } from './ETFPriceService';
 
 interface CSVRow {
   'Action': string;
@@ -22,7 +23,23 @@ interface CSVRow {
   'Merchant category'?: string;
 }
 
+export interface Trading212Holding {
+  ticker: string;
+  name: string;
+  isin?: string;
+  shares: number;
+  averageBuyPrice: number;
+  totalInvested: number;
+  currentPrice?: number;
+  currentValue?: number;
+  profitLoss?: number;
+  profitLossPercentage?: number;
+  currency: string;
+}
+
 export class Trading212ImportService {
+  private etfPriceService = new ETFPriceService();
+
   private get transactionRepo() {
     return AppDataSource.getRepository(Trading212Transaction);
   }
@@ -141,5 +158,123 @@ export class Trading212ImportService {
     });
 
     return { transactions, total };
+  }
+
+  /**
+   * Calculate current holdings from buy/sell transactions
+   */
+  async getHoldings(portfolioId: string): Promise<Trading212Holding[]> {
+    const transactions = await this.transactionRepo.find({
+      where: { portfolioId },
+      order: { time: 'ASC' }
+    });
+
+    // Group by ticker
+    const holdingsMap = new Map<string, {
+      ticker: string;
+      name: string;
+      isin?: string;
+      shares: number;
+      totalCost: number;
+      currency: string;
+    }>();
+
+    for (const tx of transactions) {
+      if (!tx.ticker || !tx.shares || !tx.pricePerShare) continue;
+
+      const action = tx.action.toLowerCase();
+      if (!action.includes('buy') && !action.includes('sell')) continue;
+
+      const holding = holdingsMap.get(tx.ticker) || {
+        ticker: tx.ticker,
+        name: tx.name || tx.ticker,
+        isin: tx.isin,
+        shares: 0,
+        totalCost: 0,
+        currency: tx.priceCurrency || 'EUR'
+      };
+
+      if (action.includes('buy')) {
+        holding.shares += tx.shares;
+        holding.totalCost += tx.shares * tx.pricePerShare;
+      } else if (action.includes('sell')) {
+        const avgPrice = holding.shares > 0 ? holding.totalCost / holding.shares : 0;
+        holding.shares -= tx.shares;
+        holding.totalCost -= tx.shares * avgPrice;
+      }
+
+      if (holding.shares > 0.0001) {
+        holdingsMap.set(tx.ticker, holding);
+      } else {
+        holdingsMap.delete(tx.ticker);
+      }
+    }
+
+    // Get current prices
+    const tickers = Array.from(holdingsMap.keys());
+    const prices = await this.etfPriceService.getPrices(tickers);
+
+    // Build final holdings with P&L
+    const holdings: Trading212Holding[] = [];
+    for (const [ticker, data] of holdingsMap.entries()) {
+      const averageBuyPrice = data.shares > 0 ? data.totalCost / data.shares : 0;
+      const priceData = prices.get(ticker);
+      
+      const holding: Trading212Holding = {
+        ticker: data.ticker,
+        name: data.name,
+        isin: data.isin,
+        shares: data.shares,
+        averageBuyPrice,
+        totalInvested: data.totalCost,
+        currency: data.currency
+      };
+
+      if (priceData) {
+        holding.currentPrice = priceData.price;
+        holding.currentValue = data.shares * priceData.price;
+        holding.profitLoss = holding.currentValue - data.totalCost;
+        holding.profitLossPercentage = data.totalCost > 0 
+          ? (holding.profitLoss / data.totalCost) * 100 
+          : 0;
+      }
+
+      holdings.push(holding);
+    }
+
+    return holdings;
+  }
+
+  /**
+   * Get portfolio totals with P&L
+   */
+  async getPortfolioTotals(portfolioId: string) {
+    const holdings = await this.getHoldings(portfolioId);
+    
+    let totalInvested = 0;
+    let totalCurrentValue = 0;
+    let holdingsWithPrices = 0;
+
+    for (const holding of holdings) {
+      totalInvested += holding.totalInvested;
+      if (holding.currentValue !== undefined) {
+        totalCurrentValue += holding.currentValue;
+        holdingsWithPrices++;
+      }
+    }
+
+    const profitLoss = totalCurrentValue - totalInvested;
+    const profitLossPercentage = totalInvested > 0 
+      ? (profitLoss / totalInvested) * 100 
+      : 0;
+
+    return {
+      totalInvested,
+      totalCurrentValue,
+      profitLoss,
+      profitLossPercentage,
+      holdingsCount: holdings.length,
+      holdingsWithPrices
+    };
   }
 }
