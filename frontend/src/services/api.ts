@@ -157,6 +157,29 @@ export interface Trading212ImportResult {
   errors: string[];
 }
 
+export interface Trading212Holding {
+  ticker: string;
+  name: string;
+  isin?: string;
+  shares: number;
+  averageBuyPrice: number;
+  totalInvested: number;
+  currentPrice?: number;
+  currentValue?: number;
+  profitLoss?: number;
+  profitLossPercentage?: number;
+  currency: string;
+}
+
+export interface Trading212Totals {
+  totalInvested: number;
+  totalCurrentValue: number;
+  profitLoss: number;
+  profitLossPercentage: number;
+  holdingsCount: number;
+  holdingsWithPrices: number;
+}
+
 class ApiService {
   private api: AxiosInstance;
 
@@ -403,6 +426,20 @@ class ApiService {
     const { data } = await this.api.get<Trading212TransactionsResponse>(
       `/portfolios/${portfolioId}/trading212/transactions`,
       { params: { limit, offset } }
+    );
+    return data;
+  }
+
+  async getTrading212Holdings(portfolioId: string): Promise<Trading212Holding[]> {
+    const { data } = await this.api.get<Trading212Holding[]>(
+      `/portfolios/${portfolioId}/trading212/holdings`
+    );
+    return data;
+  }
+
+  async getTrading212Totals(portfolioId: string): Promise<Trading212Totals> {
+    const { data } = await this.api.get<Trading212Totals>(
+      `/portfolios/${portfolioId}/trading212/totals`
     );
     return data;
   }
