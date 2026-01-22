@@ -113,7 +113,6 @@ const PortfolioDetail: React.FC = () => {
 
   const isSimpleBalanceView = portfolio?.exchange === 'revolutx';
   const isTrading212 = portfolio?.exchange === 'trading212';
-  const isBinance = portfolio?.exchange === 'binance' || (!portfolio?.exchange && !isSimpleBalanceView && !isTrading212);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -329,7 +328,7 @@ const PortfolioDetail: React.FC = () => {
 
   const currencySymbol = portfolio.exchange === 'revolutx' || portfolio.exchange === 'trading212' ? '€' : '$';
 
-  // TRADING212 VIEW - keeping existing code
+  // TRADING212 VIEW
   if (isTrading212 && trading212Summary && trading212Totals) {
     return (
       <Layout>
@@ -365,7 +364,6 @@ const PortfolioDetail: React.FC = () => {
             <div className="error-message">{error}</div>
           )}
 
-          {/* Holdings Table - NOW FIRST */}
           <div className="holdings-section">
             <div className="section-header">
               <h2>Current Holdings</h2>
@@ -428,7 +426,6 @@ const PortfolioDetail: React.FC = () => {
             )}
           </div>
 
-          {/* 6 Cards in 3+3 Grid - Cash Summary (3 cards) */}
           <h2 style={{ marginTop: '2rem', marginBottom: '1rem' }}>Cash Summary</h2>
           <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
             <div className="stat-card">
@@ -450,7 +447,6 @@ const PortfolioDetail: React.FC = () => {
             </div>
           </div>
 
-          {/* Holdings P&L Summary (3 cards) */}
           <h2 style={{ marginTop: '2rem', marginBottom: '1rem' }}>Holdings Performance</h2>
           <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
             <div className="stat-card">
@@ -474,10 +470,8 @@ const PortfolioDetail: React.FC = () => {
             </div>
           </div>
 
-          {/* Transactions Table */}
           <div className="trades-section">
             <h2>Recent Transactions</h2>
-
             {trading212Transactions.length === 0 ? (
               <div className="trades-table">
                 <p style={{ padding: '20px', textAlign: 'center' }}>No transactions yet. Import your Trading212 CSV to get started.</p>
@@ -530,7 +524,7 @@ const PortfolioDetail: React.FC = () => {
     );
   }
 
-  // SIMPLE BALANCE VIEW (for Revolut X) - keeping existing code
+  // SIMPLE BALANCE VIEW (for Revolut X)
   if (isSimpleBalanceView && simpleBalances) {
     const chartData = simpleBalances.holdings.map((holding, index) => ({
       name: holding.asset,
@@ -585,7 +579,6 @@ const PortfolioDetail: React.FC = () => {
             </div>
           </div>
 
-          {/* Pie Chart Section - Dark Background with Custom Tooltip */}
           <div className="chart-section" style={{ 
             marginBottom: '2rem', 
             background: 'var(--bg-card)', 
@@ -662,7 +655,7 @@ const PortfolioDetail: React.FC = () => {
     );
   }
 
-  // FULL VIEW (for Binance and other portfolios with P/L tracking)
+  // FULL VIEW (Binance and other portfolios) - SEMPRE MOSTRA SYNC HOLDINGS
   const profitLoss = portfolio.profitLoss ?? 0;
   const totalInvested = portfolio.totalInvested ?? 0;
   const profitLossPercentage = totalInvested > 0
@@ -678,15 +671,13 @@ const PortfolioDetail: React.FC = () => {
             {portfolio.description && <p>{portfolio.description}</p>}
           </div>
           <div className="header-actions">
-            {isBinance && (
-              <button 
-                onClick={handleSyncHoldings} 
-                className="btn-info"
-                disabled={syncing}
-              >
-                {syncing ? '⏳ Syncing...' : '🔄 Sync Holdings'}
-              </button>
-            )}
+            <button 
+              onClick={handleSyncHoldings} 
+              className="btn-info"
+              disabled={syncing}
+            >
+              {syncing ? '⏳ Syncing...' : '🔄 Sync Holdings'}
+            </button>
             <button onClick={() => setShowImportForm(!showImportForm)} className="btn-success">
               📥 Import Trades
             </button>
