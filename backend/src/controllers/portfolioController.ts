@@ -4,7 +4,7 @@ import { Portfolio } from '../entities/Portfolio';
 import { Trade } from '../entities/Trade';
 import { Transfer } from '../entities/Transfer';
 import { ClosedPosition } from '../entities/ClosedPosition';
-import { AuthRequest } from '../middleware/auth';
+import { AuthRequest } from '../middleware/authenticate';
 
 // Helper function to safely parse numbers
 const parseNum = (value: any): number => {
