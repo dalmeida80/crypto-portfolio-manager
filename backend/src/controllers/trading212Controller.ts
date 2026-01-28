@@ -53,6 +53,10 @@ export class Trading212Controller {
       const { portfolioId } = req.params;
       const userId = req.userId;
 
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
       // Validate portfolio
       const portfolio = await this.portfolioRepo.findOne({
         where: { id: portfolioId, userId }
@@ -138,6 +142,10 @@ export class Trading212Controller {
       console.log('[Trading212 API] Sync orders request');
       const { portfolioId } = req.params;
       const userId = req.userId;
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
 
       // Validate portfolio
       const portfolio = await this.portfolioRepo.findOne({
@@ -241,6 +249,10 @@ export class Trading212Controller {
       console.log('[Trading212 API] Sync transactions request');
       const { portfolioId } = req.params;
       const userId = req.userId;
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
 
       // Validate portfolio
       const portfolio = await this.portfolioRepo.findOne({
