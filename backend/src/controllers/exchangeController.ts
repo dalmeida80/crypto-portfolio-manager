@@ -19,8 +19,14 @@ export const addApiKey = async (req: AuthRequest, res: Response): Promise<void> 
     const { apiKey, apiSecret, label, exchange = 'binance' } = req.body;
     const userId = req.user!.userId;
 
-    if (!apiKey || !apiSecret) {
-      res.status(400).json({ error: 'API key and secret are required' });
+    if (!apiKey) {
+      res.status(400).json({ error: 'API key is required' });
+      return;
+    }
+
+    // Trading212 doesn't use apiSecret, but Binance and RevolutX do
+    if (exchange !== 'trading212' && !apiSecret) {
+      res.status(400).json({ error: 'API secret is required for this exchange' });
       return;
     }
 
@@ -40,7 +46,7 @@ export const addApiKey = async (req: AuthRequest, res: Response): Promise<void> 
       isValid = await revolutX.testConnection();
     } else if (exchange === 'trading212') {
       const environment = (process.env.TRADING212_ENV as 'demo' | 'live') || 'live';
-      const trading212 = new Trading212ApiService({ apiKey, apiSecret, environment });
+      const trading212 = new Trading212ApiService({ apiKey, environment });
       isValid = await trading212.testConnection();
     }
 
@@ -55,7 +61,8 @@ export const addApiKey = async (req: AuthRequest, res: Response): Promise<void> 
     exchangeApiKey.userId = userId;
     exchangeApiKey.exchange = exchange;
     exchangeApiKey.apiKey = encrypt(apiKey);
-    exchangeApiKey.apiSecret = encrypt(apiSecret);
+    // Trading212 doesn't use apiSecret, but we store a placeholder to satisfy schema
+    exchangeApiKey.apiSecret = apiSecret ? encrypt(apiSecret) : encrypt('not-used');
     exchangeApiKey.label = label;
     exchangeApiKey.isActive = true;
 
