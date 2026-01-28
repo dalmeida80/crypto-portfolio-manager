@@ -16,7 +16,7 @@ const parseNum = (value: any): number => {
 export const createPortfolio = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { name, description, exchange } = req.body;
-    const userId = req.user!.userId;
+    const userId = req.userId!;
 
     if (!name) {
       res.status(400).json({ error: 'Portfolio name is required' });
@@ -45,7 +45,7 @@ export const createPortfolio = async (req: AuthRequest, res: Response): Promise<
 
 export const listPortfolios = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user!.userId;
+    const userId = req.userId!;
     const portfolioRepo = AppDataSource.getRepository(Portfolio);
 
     const portfolios = await portfolioRepo.find({
@@ -63,7 +63,7 @@ export const listPortfolios = async (req: AuthRequest, res: Response): Promise<v
 
 export const getPortfolio = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user!.userId;
+    const userId = req.userId!;
     const { portfolioId } = req.params;
 
     const portfolioRepo = AppDataSource.getRepository(Portfolio);
@@ -86,7 +86,7 @@ export const getPortfolio = async (req: AuthRequest, res: Response): Promise<voi
 
 export const updatePortfolio = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user!.userId;
+    const userId = req.userId!;
     const { portfolioId } = req.params;
     const { name, description, exchange } = req.body;
 
@@ -115,7 +115,7 @@ export const updatePortfolio = async (req: AuthRequest, res: Response): Promise<
 
 export const deletePortfolio = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user!.userId;
+    const userId = req.userId!;
     const { portfolioId } = req.params;
 
     const portfolioRepo = AppDataSource.getRepository(Portfolio);
@@ -146,7 +146,7 @@ export const getPortfolioClosedPositions = async (
   res: Response
 ): Promise<void> => {
   try {
-    const userId = req.user!.userId;
+    const userId = req.userId!;
     const { portfolioId } = req.params;
     const { symbol } = req.query;
 
@@ -189,7 +189,7 @@ export const getPortfolioTransfers = async (
   res: Response
 ): Promise<void> => {
   try {
-    const userId = req.user!.userId;
+    const userId = req.userId!;
     const { portfolioId } = req.params;
     const { type, asset } = req.query;
 
@@ -235,7 +235,7 @@ export const getPortfolioStats = async (
   res: Response
 ): Promise<void> => {
   try {
-    const userId = req.user!.userId;
+    const userId = req.userId!;
     const { portfolioId } = req.params;
 
     // Verify portfolio ownership
@@ -341,7 +341,7 @@ export const getPortfolioStats = async (
  */
 export const getUserStats = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user!.userId;
+    const userId = req.userId!;
 
     // Get all user portfolios
     const portfolioRepo = AppDataSource.getRepository(Portfolio);
