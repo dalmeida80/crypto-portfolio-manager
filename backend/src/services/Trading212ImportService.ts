@@ -283,6 +283,7 @@ export class Trading212ImportService {
 
     return holdings;
   }
+
    */
   async getPortfolioTotals(portfolioId: string) {
     const holdings = await this.getHoldings(portfolioId);
