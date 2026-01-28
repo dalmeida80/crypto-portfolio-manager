@@ -4,6 +4,7 @@ import { decrypt } from '../utils/encryption';
 
 interface Trading212Config {
   apiKey: string;
+  apiSecret: string;
   environment: 'demo' | 'live';
 }
 
@@ -83,13 +84,15 @@ export class Trading212ApiService {
       ? 'https://demo.trading212.com/api/v0'
       : 'https://live.trading212.com/api/v0';
 
+    // Trading212 uses Basic Auth with base64 encoded API_KEY:API_SECRET
+    const credentials = Buffer.from(`${config.apiKey}:${config.apiSecret}`).toString('base64');
+
     console.log(`[Trading212] Initializing with environment: ${config.environment}, baseURL: ${this.baseUrl}`);
 
-    // Trading212 uses a single API key as Authorization header
     this.client = axios.create({
       baseURL: this.baseUrl,
       headers: {
-        'Authorization': config.apiKey,
+        'Authorization': `Basic ${credentials}`,
         'Content-Type': 'application/json'
       },
       timeout: 30000
@@ -119,11 +122,11 @@ export class Trading212ApiService {
 
   /**
    * Create service instance from encrypted API key entity
-   * Note: Trading212 only uses apiKey, apiSecret is ignored
    */
   static async createFromApiKey(exchangeApiKey: ExchangeApiKey, environment: 'demo' | 'live' = 'live'): Promise<Trading212ApiService> {
     const apiKey = decrypt(exchangeApiKey.apiKey);
-    return new Trading212ApiService({ apiKey, environment });
+    const apiSecret = decrypt(exchangeApiKey.apiSecret);
+    return new Trading212ApiService({ apiKey, apiSecret, environment });
   }
 
   /**
