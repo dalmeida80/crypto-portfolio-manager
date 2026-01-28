@@ -44,7 +44,7 @@ export class Trading212Controller {
   }
 
   /**
-   * NEW: Sync holdings from Trading212 API
+   * NEW: Sync holdings from Trading212 API and persist to database
    * POST /portfolios/:portfolioId/trading212/sync-holdings
    */
   syncHoldings = async (req: AuthRequest, res: Response) => {
@@ -54,8 +54,11 @@ export class Trading212Controller {
       const userId = req.userId;
 
       if (!userId) {
+        console.log('[Trading212 API] Missing userId');
         return res.status(401).json({ error: 'Unauthorized' });
       }
+
+      console.log(`[Trading212 API] User: ${userId}, Portfolio: ${portfolioId}`);
 
       // Validate portfolio
       const portfolio = await this.portfolioRepo.findOne({
@@ -63,6 +66,7 @@ export class Trading212Controller {
       });
 
       if (!portfolio) {
+        console.log('[Trading212 API] Portfolio not found');
         return res.status(404).json({ error: 'Portfolio not found' });
       }
 
@@ -79,8 +83,8 @@ export class Trading212Controller {
         });
       }
 
-      // Get environment from env vars (default: live)
       const environment = (process.env.TRADING212_ENV as 'demo' | 'live') || 'live';
+      console.log(`[Trading212 API] Using environment: ${environment}`);
 
       // Create API service
       const apiService = await Trading212ApiService.createFromApiKey(apiKey, environment);
@@ -88,41 +92,65 @@ export class Trading212Controller {
       // Test connection
       const connected = await apiService.testConnection();
       if (!connected) {
-        return res.status(401).json({ error: 'Failed to connect to Trading212 API. Check your credentials.' });
+        return res.status(401).json({ error: 'Failed to connect to Trading212 API' });
       }
 
       // Fetch holdings
-      console.log('[Trading212 API] Fetching portfolio holdings...');
+      console.log('[Trading212 API] Fetching holdings...');
       const holdings = await apiService.getPortfolio();
       console.log(`[Trading212 API] Found ${holdings.length} holdings`);
 
-      // Fetch account cash
-      const accountCash = await apiService.getAccountCash();
-      console.log(`[Trading212 API] Account cash: €${accountCash.free}`);
+      // Convert holdings to synthetic BUY trades (representing current positions)
+      // Note: This creates a snapshot of current holdings, not actual trade history
+      const trades = holdings
+        .filter(h => h.quantity > 0)
+        .map(holding => {
+          const trade = new Trade();
+          trade.portfolioId = portfolioId;
+          trade.symbol = this.normalizeSymbol(holding.ticker);
+          trade.type = 'BUY';
+          trade.quantity = holding.quantity;
+          trade.price = holding.averagePrice;
+          trade.total = holding.quantity * holding.averagePrice;
+          trade.fee = 0;
+          trade.executedAt = new Date(holding.initialFillDate);
+          trade.externalId = `holding-${holding.ticker}`;
+          trade.source = 'trading212-holdings-snapshot';
+          trade.notes = `Current position from API sync. Current price: €${holding.currentPrice.toFixed(2)}, P&L: €${holding.ppl.toFixed(2)}`;
+          return trade;
+        });
+
+      if (trades.length === 0) {
+        console.log('[Trading212 API] No holdings to sync');
+        return res.json({
+          success: true,
+          synced: 0,
+          message: 'No holdings found'
+        });
+      }
+
+      // Delete existing holdings snapshots to avoid duplicates
+      await this.tradeRepo.delete({
+        portfolioId,
+        source: 'trading212-holdings-snapshot'
+      });
+      console.log('[Trading212 API] Cleared existing holdings snapshots');
+
+      // Save new holdings as trades
+      await this.tradeRepo.save(trades);
+      console.log(`[Trading212 API] Synced ${trades.length} holdings`);
 
       res.json({
         success: true,
+        synced: trades.length,
         holdings: holdings.map(h => ({
           ticker: h.ticker,
           symbol: this.normalizeSymbol(h.ticker),
           quantity: h.quantity,
           averagePrice: h.averagePrice,
           currentPrice: h.currentPrice,
-          totalValue: h.quantity * h.currentPrice,
-          ppl: h.ppl,
-          initialFillDate: h.initialFillDate
-        })),
-        cash: {
-          free: accountCash.free,
-          total: accountCash.total,
-          invested: accountCash.invested,
-          result: accountCash.result
-        },
-        summary: {
-          totalHoldings: holdings.length,
-          totalValue: holdings.reduce((sum, h) => sum + (h.quantity * h.currentPrice), 0),
-          freeCash: accountCash.free
-        }
+          ppl: h.ppl
+        }))
       });
     } catch (error) {
       console.error('[Trading212 API] Sync holdings error:', error);
