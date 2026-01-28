@@ -191,33 +191,31 @@ const ApiKeysPage: React.FC = () => {
                   />
                 </div>
 
-                <div className="form-group">
-                  <label htmlFor="apiSecret">
-                    {selectedExchange === "binance"
-                      ? "API Secret"
-                      : selectedExchange === "revolutx"
-                      ? "Private Key (PEM format)"
-                      : "API Secret"}{" "}
-                    *
-                  </label>
-                  <textarea
-                    id="apiSecret"
-                    value={formData.apiSecret}
-                    onChange={(e) =>
-                      setFormData({ ...formData, apiSecret: e.target.value })
-                    }
-                    required
-                    placeholder={
-                      selectedExchange === "binance"
-                        ? "Your Binance API Secret"
-                        : selectedExchange === "revolutx"
-                        ? "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
-                        : "Your Trading212 API Secret"
-                    }
-                    rows={selectedExchange === "revolutx" ? 5 : 1}
-                    style={{ fontFamily: "monospace", fontSize: "0.9em" }}
-                  />
-                </div>
+                {selectedExchange !== "trading212" && (
+                  <div className="form-group">
+                    <label htmlFor="apiSecret">
+                      {selectedExchange === "binance"
+                        ? "API Secret"
+                        : "Private Key (PEM format)"}{" "}
+                      *
+                    </label>
+                    <textarea
+                      id="apiSecret"
+                      value={formData.apiSecret}
+                      onChange={(e) =>
+                        setFormData({ ...formData, apiSecret: e.target.value })
+                      }
+                      required
+                      placeholder={
+                        selectedExchange === "binance"
+                          ? "Your Binance API Secret"
+                          : "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+                      }
+                      rows={selectedExchange === "revolutx" ? 5 : 1}
+                      style={{ fontFamily: "monospace", fontSize: "0.9em" }}
+                    />
+                  </div>
+                )}
 
                 {selectedExchange === "binance" && (
                   <div className="help-text">
@@ -253,10 +251,11 @@ const ApiKeysPage: React.FC = () => {
                     <strong>⚠️ Important:</strong>
                     <ul>
                       <li>Use <strong>Demo API</strong> for testing first</li>
+                      <li>Only paste the <strong>API Key</strong> (no secret needed)</li>
                       <li>Demo API: <code>https://demo.trading212.com</code></li>
                       <li>Live API: <code>https://www.trading212.com</code></li>
                       <li>API keys are read-only by default (no trading permissions)</li>
-                      <li>Your keys are encrypted with AES-256-GCM</li>
+                      <li>Your key is encrypted with AES-256-GCM before storage</li>
                       <li>Backend must have <code>TRADING212_ENV=demo</code> or <code>live</code> set</li>
                     </ul>
                   </div>
@@ -397,7 +396,7 @@ openssl pkey -in revolutx-private.key -pubout -out revolutx-public.key
 
         {/* NEW: Instructions – Trading212 */}
         <div className="settings-section">
-          <h2>How to Get Trading212 API Keys</h2>
+          <h2>How to Get Trading212 API Key</h2>
           <ol className="instructions-list">
             <li>
               <strong>For Demo Account (Recommended for testing):</strong>
@@ -414,8 +413,9 @@ openssl pkey -in revolutx-private.key -pubout -out revolutx-public.key
                 </li>
                 <li>Go to <strong>Settings → API (Beta)</strong></li>
                 <li>Click <strong>Generate API Key</strong></li>
-                <li>Copy both the <strong>API Key</strong> and <strong>API Secret</strong></li>
-                <li>Paste them in the form above</li>
+                <li>Copy the <strong>API Key</strong> (looks like: <code>223015...</code>)</li>
+                <li>Paste it in the form above</li>
+                <li><strong>No API Secret needed!</strong></li>
                 <li>Make sure your backend has <code>TRADING212_ENV=demo</code></li>
               </ul>
             </li>
@@ -434,8 +434,8 @@ openssl pkey -in revolutx-private.key -pubout -out revolutx-public.key
                 </li>
                 <li>Go to <strong>Settings → API (Beta)</strong></li>
                 <li>Click <strong>Generate API Key</strong></li>
-                <li>Copy both the <strong>API Key</strong> and <strong>API Secret</strong></li>
-                <li>Paste them in the form above</li>
+                <li>Copy the <strong>API Key</strong></li>
+                <li>Paste it in the form above</li>
                 <li>Make sure your backend has <code>TRADING212_ENV=live</code></li>
               </ul>
             </li>
@@ -445,6 +445,7 @@ openssl pkey -in revolutx-private.key -pubout -out revolutx-public.key
                 <li>Trading212 API keys are <strong>read-only</strong> by default</li>
                 <li>They cannot place orders or withdraw funds</li>
                 <li>Keys are encrypted before storage</li>
+                <li>Single API key is used (no separate secret)</li>
               </ul>
             </li>
           </ol>
