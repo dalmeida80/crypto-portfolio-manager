@@ -187,7 +187,8 @@ export class Trading212ApiService {
         console.log(`  Page ${pageCount}: fetching...`);
         
         const response = await this.client.get<PaginatedResponse<Order>>(nextPath);
-        const { items, nextPagePath } = response.data;
+        const data: PaginatedResponse<Order> = response.data;
+        const { items, nextPagePath } = data;
         
         allOrders.push(...items);
         console.log(`  Page ${pageCount}: ${items.length} orders (total: ${allOrders.length})`);
@@ -222,7 +223,8 @@ export class Trading212ApiService {
         console.log(`  Page ${pageCount}: fetching...`);
         
         const response = await this.client.get<PaginatedResponse<Transaction>>(nextPath);
-        const { items, nextPagePath } = response.data;
+        const data: PaginatedResponse<Transaction> = response.data;
+        const { items, nextPagePath } = data;
         
         allTransactions.push(...items);
         console.log(`  Page ${pageCount}: ${items.length} transactions (total: ${allTransactions.length})`);
@@ -257,7 +259,8 @@ export class Trading212ApiService {
         console.log(`  Page ${pageCount}: fetching...`);
         
         const response = await this.client.get<PaginatedResponse<Dividend>>(nextPath);
-        const { items, nextPagePath } = response.data;
+        const data: PaginatedResponse<Dividend> = response.data;
+        const { items, nextPagePath } = data;
         
         allDividends.push(...items);
         console.log(`  Page ${pageCount}: ${items.length} dividends (total: ${allDividends.length})`);
