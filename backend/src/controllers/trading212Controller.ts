@@ -139,8 +139,7 @@ export class Trading212Controller {
       // Save new holdings as trades
       await this.tradeRepo.save(trades);
       console.log(`[Trading212 API] Synced ${trades.length} holdings`);
-
-      res.json({
+       res.json({
         success: true,
         synced: trades.length,
         holdings: holdings.map(h => ({
@@ -149,9 +148,20 @@ export class Trading212Controller {
           quantity: h.quantity,
           averagePrice: h.averagePrice,
           currentPrice: h.currentPrice,
-          ppl: h.ppl
-        }))
+          totalValue: h.quantity * h.currentPrice,
+          ppl: h.ppl,
+          initialFillDate: h.initialFillDate
+        })),
+        summary: {
+          totalHoldings: holdings.length,
+          totalValue: holdings.reduce(
+            (sum, h) => sum + (h.quantity * h.currentPrice),
+            0
+          ),
+          freeCash: 0
+        }
       });
+
     } catch (error) {
       console.error('[Trading212 API] Sync holdings error:', error);
       res.status(500).json({
