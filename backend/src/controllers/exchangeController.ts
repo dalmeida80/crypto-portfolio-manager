@@ -6,6 +6,7 @@ import { AuthRequest } from '../middleware/auth';
 import { encrypt } from '../utils/encryption';
 import { BinanceService } from '../services/binanceService';
 import { RevolutXService } from '../services/revolutXService';
+import { Trading212ApiService } from '../services/trading212ApiService';
 import { TradeImportService } from '../services/tradeImportService';
 import { RevolutXCsvParser } from '../services/revolutXCsvParser';
 import { BinanceHoldingsService } from '../services/BinanceHoldingsService';
@@ -23,8 +24,8 @@ export const addApiKey = async (req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
-    if (!['binance', 'revolutx'].includes(exchange)) {
-      res.status(400).json({ error: 'Invalid exchange. Supported: binance, revolutx' });
+    if (!['binance', 'revolutx', 'trading212'].includes(exchange)) {
+      res.status(400).json({ error: 'Invalid exchange. Supported: binance, revolutx, trading212' });
       return;
     }
 
@@ -37,6 +38,10 @@ export const addApiKey = async (req: AuthRequest, res: Response): Promise<void> 
     } else if (exchange === 'revolutx') {
       const revolutX = new RevolutXService(apiKey, apiSecret);
       isValid = await revolutX.testConnection();
+    } else if (exchange === 'trading212') {
+      const environment = (process.env.TRADING212_ENV as 'demo' | 'live') || 'live';
+      const trading212 = new Trading212ApiService({ apiKey, apiSecret, environment });
+      isValid = await trading212.testConnection();
     }
 
     if (!isValid) {
@@ -136,6 +141,29 @@ export const getBalances = async (req: AuthRequest, res: Response): Promise<void
     } else if (apiKey.exchange === 'revolutx') {
       const revolutX = await RevolutXService.createFromApiKey(apiKey);
       balances = await revolutX.getAccountBalances();
+    } else if (apiKey.exchange === 'trading212') {
+      const environment = (process.env.TRADING212_ENV as 'demo' | 'live') || 'live';
+      const trading212 = await Trading212ApiService.createFromApiKey(apiKey, environment);
+      const portfolio = await trading212.getPortfolio();
+      const cash = await trading212.getAccountCash();
+      
+      // Convert Trading212 format to standard balance format
+      balances = portfolio.map(holding => ({
+        asset: holding.ticker.replace(/_US_EQ$|_UK_EQ$|_DE_EQ$/i, ''),
+        free: holding.quantity,
+        locked: 0,
+        total: holding.quantity
+      }));
+      
+      // Add cash balance
+      if (cash.free > 0) {
+        balances.push({
+          asset: 'EUR',
+          free: cash.free,
+          locked: cash.blocked,
+          total: cash.total
+        });
+      }
     } else {
       res.status(400).json({ error: 'Unsupported exchange' });
       return;
