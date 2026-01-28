@@ -7,7 +7,8 @@ import {
   importAllTrades,
   importRevolutXCsv,
   getImportStatus,
-  syncBinanceHoldings
+  syncBinanceHoldings,
+  syncTrading212Holdings
 } from '../controllers/exchangeController';
 import { authenticate } from '../middleware/auth';
 
@@ -26,5 +27,7 @@ router.get('/portfolios/:portfolioId/import-status', authenticate, getImportStat
 
 // Binance holdings sync
 router.post('/portfolios/:portfolioId/sync-holdings', authenticate, syncBinanceHoldings);
+// Trading212 holdings sync
+router.post('/portfolios/:portfolioId/sync-trading212-holdings', authenticate, syncTrading212Holdings);
 
 export default router;
