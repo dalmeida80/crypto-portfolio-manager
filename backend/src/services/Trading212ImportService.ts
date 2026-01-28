@@ -164,6 +164,45 @@ export class Trading212ImportService {
    * Calculate current holdings from buy/sell transactions
    */
   async getHoldings(portfolioId: string): Promise<Trading212Holding[]> {
+    // Fetch trades from API sync (holdings snapshot)
+    const tradesFromAPI = await this.tradeRepo.find({
+      where: { 
+        portfolioId,
+        source: 'trading212-holdings-snapshot'
+      }
+    });
+
+    // If we have fresh API data, use it directly
+    if (tradesFromAPI.length > 0) {
+      console.log(`[Trading212] Using ${tradesFromAPI.length} holdings from API snapshot`);
+      
+      const tickers = tradesFromAPI.map(t => t.symbol);
+      const prices = await this.etfPriceService.getPrices(tickers);
+      
+      return tradesFromAPI.map(trade => {
+        const priceData = prices.get(trade.symbol);
+        const currentPrice = priceData?.price || trade.price;
+        const currentValue = trade.quantity * currentPrice;
+        const totalInvested = trade.quantity * trade.price;
+        
+        return {
+          ticker: trade.symbol,
+          name: trade.symbol,
+          shares: trade.quantity,
+          averageBuyPrice: trade.price,
+          totalInvested,
+          currentPrice,
+          currentValue,
+          profitLoss: currentValue - totalInvested,
+          profitLossPercentage: totalInvested > 0 ? ((currentValue - totalInvested) / totalInvested) * 100 : 0,
+          currency: 'EUR'
+        };
+      });
+    }
+
+    // Fallback: calculate from transactions (CSV)
+    console.log(`[Trading212] No API snapshot found, calculating from transactions`);
+    
     const transactions = await this.transactionRepo.find({
       where: { portfolioId },
       order: { time: 'ASC' }
@@ -244,9 +283,6 @@ export class Trading212ImportService {
 
     return holdings;
   }
-
-  /**
-   * Get portfolio totals with P&L
    */
   async getPortfolioTotals(portfolioId: string) {
     const holdings = await this.getHoldings(portfolioId);
