@@ -110,6 +110,11 @@ const PortfolioDetail: React.FC = () => {
   });
   const [importing, setImporting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  
+  // NEW: Trading212 API sync states
+  const [syncingHoldings, setSyncingHoldings] = useState(false);
+  const [syncingOrders, setSyncingOrders] = useState(false);
+  const [syncingTransactions, setSyncingTransactions] = useState(false);
 
   const isSimpleBalanceView = portfolio?.exchange === 'revolutx';
   const isTrading212 = portfolio?.exchange === 'trading212';
@@ -243,6 +248,74 @@ const PortfolioDetail: React.FC = () => {
     }
   };
 
+  // NEW: Trading212 API sync handlers
+  const handleTrading212SyncHoldings = async () => {
+    setSyncingHoldings(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const result = await apiService.syncTrading212Holdings(id!);
+      setSuccessMessage(
+        `✅ Holdings synced from Trading212 API!\n` +
+        `Total holdings: ${result.summary.totalHoldings}\n` +
+        `Total value: €${formatNumber(result.summary.totalValue)}\n` +
+        `Free cash: €${formatNumber(result.summary.freeCash)}`
+      );
+      await fetchPortfolioData();
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Failed to sync holdings';
+      const hint = err.response?.data?.hint || '';
+      setError(errorMsg + (hint ? '\n' + hint : ''));
+    } finally {
+      setSyncingHoldings(false);
+    }
+  };
+
+  const handleTrading212SyncOrders = async () => {
+    setSyncingOrders(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const result = await apiService.syncTrading212Orders(id!);
+      setSuccessMessage(
+        `✅ Orders imported from Trading212 API!\n` +
+        `Imported: ${result.imported} trades\n` +
+        `Buy orders: ${result.summary.buyOrders}\n` +
+        `Sell orders: ${result.summary.sellOrders}`
+      );
+      await fetchPortfolioData();
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Failed to sync orders';
+      const hint = err.response?.data?.hint || '';
+      setError(errorMsg + (hint ? '\n' + hint : ''));
+    } finally {
+      setSyncingOrders(false);
+    }
+  };
+
+  const handleTrading212SyncTransactions = async () => {
+    setSyncingTransactions(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const result = await apiService.syncTrading212Transactions(id!);
+      setSuccessMessage(
+        `✅ Transactions fetched from Trading212 API!\n` +
+        `Transactions: ${result.summary.totalTransactions}\n` +
+        `Dividends: ${result.summary.totalDividends} (€${formatNumber(result.summary.totalDividendAmount)})`
+      );
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Failed to sync transactions';
+      const hint = err.response?.data?.hint || '';
+      setError(errorMsg + (hint ? '\n' + hint : ''));
+    } finally {
+      setSyncingTransactions(false);
+    }
+  };
+
   const handleTrading212Import = async (file: File) => {
     setImporting(true);
     setError(null);
@@ -251,7 +324,7 @@ const PortfolioDetail: React.FC = () => {
     try {
       const result = await apiService.importTrading212CSV(id!, file);
       setSuccessMessage(
-        `✅ Import successful!\n` +
+        `✅ CSV import successful!\n` +
         `Imported: ${result.imported}\n` +
         `Updated: ${result.updated}\n` +
         `Duplicates: ${result.duplicates}`
@@ -331,7 +404,7 @@ const PortfolioDetail: React.FC = () => {
 
   const currencySymbol = portfolio.exchange === 'revolutx' || portfolio.exchange === 'trading212' ? '€' : '€';
 
-  // TRADING212 VIEW
+  // TRADING212 VIEW WITH API SYNC BUTTONS
   if (isTrading212 && trading212Summary && trading212Totals) {
     return (
       <Layout>
@@ -342,9 +415,38 @@ const PortfolioDetail: React.FC = () => {
               {portfolio.description && <p>{portfolio.description}</p>}
               <span className="badge-info">Trading212 Account</span>
             </div>
-            <div className="header-actions">
-              <label className="btn-primary" style={{ cursor: 'pointer' }}>
-                📥 Import CSV
+            <div className="header-actions" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              {/* API Sync Buttons */}
+              <button 
+                onClick={handleTrading212SyncHoldings}
+                disabled={syncingHoldings}
+                className="btn-info"
+                title="Sync current holdings from Trading212 API"
+              >
+                {syncingHoldings ? '⏳ Syncing...' : '🔄 Sync Holdings'}
+              </button>
+              
+              <button 
+                onClick={handleTrading212SyncOrders}
+                disabled={syncingOrders}
+                className="btn-success"
+                title="Import all filled orders from Trading212 API"
+              >
+                {syncingOrders ? '📥 Importing...' : '📥 Import Orders'}
+              </button>
+              
+              <button 
+                onClick={handleTrading212SyncTransactions}
+                disabled={syncingTransactions}
+                className="btn-secondary"
+                title="Fetch transactions and dividends from Trading212 API"
+              >
+                {syncingTransactions ? '💸 Loading...' : '💸 Transactions'}
+              </button>
+              
+              {/* CSV Import (Fallback) */}
+              <label className="btn-primary" style={{ cursor: 'pointer', margin: 0 }}>
+                📄 CSV Import
                 <input
                   type="file"
                   accept=".csv"
@@ -353,18 +455,19 @@ const PortfolioDetail: React.FC = () => {
                   disabled={importing}
                 />
               </label>
+              
               <button onClick={handleRefreshPrices} className="btn-secondary">
-                🔄 Refresh Prices
+                🔄 Refresh
               </button>
             </div>
           </div>
 
           {successMessage && (
-            <div className="success-message">{successMessage}</div>
+            <div className="success-message" style={{ whiteSpace: 'pre-line' }}>{successMessage}</div>
           )}
 
           {error && (
-            <div className="error-message">{error}</div>
+            <div className="error-message" style={{ whiteSpace: 'pre-line' }}>{error}</div>
           )}
 
           <div className="holdings-section">
@@ -374,7 +477,7 @@ const PortfolioDetail: React.FC = () => {
 
             {trading212Holdings.length === 0 ? (
               <div className="holdings-table">
-                <p style={{ padding: '20px', textAlign: 'center' }}>No holdings yet</p>
+                <p style={{ padding: '20px', textAlign: 'center' }}>No holdings yet. Click "🔄 Sync Holdings" to fetch from Trading212 API.</p>
               </div>
             ) : (
               <div className="holdings-table">
@@ -477,7 +580,7 @@ const PortfolioDetail: React.FC = () => {
             <h2>Recent Transactions</h2>
             {trading212Transactions.length === 0 ? (
               <div className="trades-table">
-                <p style={{ padding: '20px', textAlign: 'center' }}>No transactions yet. Import your Trading212 CSV to get started.</p>
+                <p style={{ padding: '20px', textAlign: 'center' }}>No transactions yet. Import CSV or click "📥 Import Orders" to sync from API.</p>
               </div>
             ) : (
               <div className="trades-table">
