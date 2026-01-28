@@ -28,6 +28,6 @@ router.get('/portfolios/:portfolioId/import-status', authenticate, getImportStat
 // Binance holdings sync
 router.post('/portfolios/:portfolioId/sync-holdings', authenticate, syncBinanceHoldings);
 // Trading212 holdings sync
-router.post('/portfolios/:portfolioId/sync-trading212-holdings', authenticate, syncTrading212Holdings);
+router.post('/portfolios/:portfolioId/trading212/sync-holdings', authenticate, syncTrading212Holdings);
 
 export default router;
