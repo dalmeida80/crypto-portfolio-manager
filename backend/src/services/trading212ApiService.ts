@@ -78,11 +78,14 @@ export class Trading212ApiService {
   private rateLimitDelay = 1200; // 1.2s between requests (safe for 50/min limit)
 
   constructor(config: Trading212Config) {
+    // Use correct base URLs for demo and live environments
     this.baseUrl = config.environment === 'demo' 
       ? 'https://demo.trading212.com/api/v0'
       : 'https://live.trading212.com/api/v0';
 
-    // Trading212 uses a single API key as Bearer token
+    console.log(`[Trading212] Initializing with environment: ${config.environment}, baseURL: ${this.baseUrl}`);
+
+    // Trading212 uses a single API key as Authorization header
     this.client = axios.create({
       baseURL: this.baseUrl,
       headers: {
@@ -136,9 +139,10 @@ export class Trading212ApiService {
   async testConnection(): Promise<boolean> {
     try {
       await this.getAccountCash();
+      console.log('[Trading212] Connection test successful');
       return true;
     } catch (error) {
-      console.error('Trading212 connection test failed:', error);
+      console.error('[Trading212] Connection test failed:', error);
       return false;
     }
   }
