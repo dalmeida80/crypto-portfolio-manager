@@ -187,6 +187,80 @@ export interface Trading212Totals {
   holdingsWithPrices: number;
 }
 
+// NEW: Trading212 API sync responses
+export interface Trading212ApiHolding {
+  ticker: string;
+  symbol: string;
+  quantity: number;
+  averagePrice: number;
+  currentPrice: number;
+  totalValue: number;
+  ppl: number;
+  initialFillDate: string;
+}
+
+export interface Trading212ApiCash {
+  free: number;
+  total: number;
+  invested: number;
+  result: number;
+}
+
+export interface Trading212SyncHoldingsResult {
+  success: boolean;
+  holdings: Trading212ApiHolding[];
+  cash: Trading212ApiCash;
+  summary: {
+    totalHoldings: number;
+    totalValue: number;
+    freeCash: number;
+  };
+}
+
+export interface Trading212SyncOrdersResult {
+  success: boolean;
+  imported: number;
+  updated: number;
+  skipped: number;
+  summary: {
+    totalOrders: number;
+    filledOrders: number;
+    buyOrders: number;
+    sellOrders: number;
+  };
+}
+
+export interface Trading212ApiTransaction {
+  type: 'DEPOSIT' | 'WITHDRAWAL';
+  amount: number;
+  dateTime: string;
+  reference: string;
+}
+
+export interface Trading212ApiDividend {
+  ticker: string;
+  symbol: string;
+  amount: number;
+  amountInEuro: number;
+  quantity: number;
+  grossAmountPerShare: number;
+  paidOn: string;
+  type: 'ORDINARY' | 'SPECIAL';
+}
+
+export interface Trading212SyncTransactionsResult {
+  success: boolean;
+  transactions: Trading212ApiTransaction[];
+  dividends: Trading212ApiDividend[];
+  summary: {
+    totalTransactions: number;
+    deposits: number;
+    withdrawals: number;
+    totalDividends: number;
+    totalDividendAmount: number;
+  };
+}
+
 class ApiService {
   private api: AxiosInstance;
 
@@ -367,7 +441,7 @@ class ApiService {
   async addApiKey(
     apiKey: string,
     apiSecret: string,
-    exchange: 'binance' | 'revolutx' = 'binance',
+    exchange: 'binance' | 'revolutx' | 'trading212' = 'binance',
     label?: string
   ): Promise<{ message: string; apiKey: ApiKey }> {
     const { data } = await this.api.post('/exchange/api-keys', {
@@ -424,7 +498,7 @@ class ApiService {
     return data;
   }
 
-  // Trading212 methods
+  // Trading212 CSV methods (existing)
   async getTrading212Summary(portfolioId: string): Promise<Trading212Summary> {
     const { data } = await this.api.get<Trading212Summary>(
       `/portfolios/${portfolioId}/trading212/summary`
@@ -473,6 +547,28 @@ class ApiService {
           'Content-Type': 'multipart/form-data',
         },
       }
+    );
+    return data;
+  }
+
+  // NEW: Trading212 API sync methods
+  async syncTrading212Holdings(portfolioId: string): Promise<Trading212SyncHoldingsResult> {
+    const { data } = await this.api.post<Trading212SyncHoldingsResult>(
+      `/portfolios/${portfolioId}/trading212/sync-holdings`
+    );
+    return data;
+  }
+
+  async syncTrading212Orders(portfolioId: string): Promise<Trading212SyncOrdersResult> {
+    const { data } = await this.api.post<Trading212SyncOrdersResult>(
+      `/portfolios/${portfolioId}/trading212/sync-orders`
+    );
+    return data;
+  }
+
+  async syncTrading212Transactions(portfolioId: string): Promise<Trading212SyncTransactionsResult> {
+    const { data } = await this.api.post<Trading212SyncTransactionsResult>(
+      `/portfolios/${portfolioId}/trading212/sync-transactions`
     );
     return data;
   }
