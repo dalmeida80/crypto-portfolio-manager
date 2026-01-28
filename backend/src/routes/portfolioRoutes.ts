@@ -29,8 +29,10 @@ import {
   listOrders,
   cancelOrder,
 } from '../controllers/revolutXController';
+import { Trading212Controller } from '../controllers/trading212Controller';
 
 const router = Router();
+const trading212Controller = new Trading212Controller();
 
 // Portfolio routes
 router.post('/', authenticate, createPortfolio);
@@ -65,6 +67,18 @@ router.get('/:portfolioId/ticker/:symbol', authenticate, getTicker);
 router.post('/:portfolioId/orders/limit', authenticate, placeLimitOrder);
 router.get('/:portfolioId/orders', authenticate, listOrders);
 router.delete('/:portfolioId/orders/:orderId', authenticate, cancelOrder);
+
+// Trading212 API sync routes (NEW)
+router.post('/:portfolioId/trading212/sync-holdings', authenticate, trading212Controller.syncHoldings);
+router.post('/:portfolioId/trading212/sync-orders', authenticate, trading212Controller.syncOrders);
+router.post('/:portfolioId/trading212/sync-transactions', authenticate, trading212Controller.syncTransactions);
+
+// Trading212 CSV import (existing fallback)
+router.post('/:portfolioId/trading212/import-csv', authenticate, trading212Controller.importCSV);
+router.get('/:portfolioId/trading212/summary', authenticate, trading212Controller.getSummary);
+router.get('/:portfolioId/trading212/transactions', authenticate, trading212Controller.getTransactions);
+router.get('/:portfolioId/trading212/holdings', authenticate, trading212Controller.getHoldings);
+router.get('/:portfolioId/trading212/totals', authenticate, trading212Controller.getTotals);
 
 // Sync and analytics
 router.post('/:portfolioId/sync', authenticate, syncBinanceTrades);
