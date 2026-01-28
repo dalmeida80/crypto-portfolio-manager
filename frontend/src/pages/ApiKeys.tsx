@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import Layout from "../components/Layout";
 import apiService, { ApiKey } from "../services/api";
 
-type ExchangeType = "binance" | "revolutx";
+type ExchangeType = "binance" | "revolutx" | "trading212";
 
 const ApiKeysPage: React.FC = () => {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
@@ -50,11 +50,12 @@ const ApiKeysPage: React.FC = () => {
         formData.label || undefined
       );
 
-      setSuccess(
-        `${
-          selectedExchange === "binance" ? "Binance" : "Revolut X"
-        } API key added successfully!`
-      );
+      const exchangeName = 
+        selectedExchange === "binance" ? "Binance" :
+        selectedExchange === "revolutx" ? "Revolut X" :
+        "Trading212";
+
+      setSuccess(`${exchangeName} API key added successfully!`);
       setFormData({ apiKey: "", apiSecret: "", label: "" });
       setShowAddForm(false);
       await loadApiKeys();
@@ -76,6 +77,15 @@ const ApiKeysPage: React.FC = () => {
       await loadApiKeys();
     } catch (err: any) {
       setError("Failed to delete API key");
+    }
+  };
+
+  const getExchangeDisplayName = (exchange: string) => {
+    switch (exchange) {
+      case "binance": return "Binance";
+      case "revolutx": return "Revolut X";
+      case "trading212": return "Trading212";
+      default: return exchange.toUpperCase();
     }
   };
 
@@ -130,6 +140,7 @@ const ApiKeysPage: React.FC = () => {
                 >
                   <option value="binance">Binance</option>
                   <option value="revolutx">Revolut X</option>
+                  <option value="trading212">Trading212</option>
                 </select>
               </div>
 
@@ -146,6 +157,8 @@ const ApiKeysPage: React.FC = () => {
                     placeholder={
                       selectedExchange === "binance"
                         ? "e.g., Main Account"
+                        : selectedExchange === "trading212"
+                        ? "e.g., Trading212 Demo"
                         : "e.g., Tracking"
                     }
                   />
@@ -155,7 +168,9 @@ const ApiKeysPage: React.FC = () => {
                   <label htmlFor="apiKey">
                     {selectedExchange === "binance"
                       ? "API Key"
-                      : "API Key (X-Revx-API-Key)"}{" "}
+                      : selectedExchange === "revolutx"
+                      ? "API Key (X-Revx-API-Key)"
+                      : "API Key"}{" "}
                     *
                   </label>
                   <input
@@ -169,7 +184,9 @@ const ApiKeysPage: React.FC = () => {
                     placeholder={
                       selectedExchange === "binance"
                         ? "Your Binance API Key"
-                        : "Your Revolut X API Key"
+                        : selectedExchange === "revolutx"
+                        ? "Your Revolut X API Key"
+                        : "Your Trading212 API Key"
                     }
                   />
                 </div>
@@ -178,7 +195,9 @@ const ApiKeysPage: React.FC = () => {
                   <label htmlFor="apiSecret">
                     {selectedExchange === "binance"
                       ? "API Secret"
-                      : "Private Key (PEM format)"}{" "}
+                      : selectedExchange === "revolutx"
+                      ? "Private Key (PEM format)"
+                      : "API Secret"}{" "}
                     *
                   </label>
                   <textarea
@@ -191,7 +210,9 @@ const ApiKeysPage: React.FC = () => {
                     placeholder={
                       selectedExchange === "binance"
                         ? "Your Binance API Secret"
-                        : "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+                        : selectedExchange === "revolutx"
+                        ? "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+                        : "Your Trading212 API Secret"
                     }
                     rows={selectedExchange === "revolutx" ? 5 : 1}
                     style={{ fontFamily: "monospace", fontSize: "0.9em" }}
@@ -227,6 +248,20 @@ const ApiKeysPage: React.FC = () => {
                   </div>
                 )}
 
+                {selectedExchange === "trading212" && (
+                  <div className="help-text">
+                    <strong>⚠️ Important:</strong>
+                    <ul>
+                      <li>Use <strong>Demo API</strong> for testing first</li>
+                      <li>Demo API: <code>https://demo.trading212.com</code></li>
+                      <li>Live API: <code>https://www.trading212.com</code></li>
+                      <li>API keys are read-only by default (no trading permissions)</li>
+                      <li>Your keys are encrypted with AES-256-GCM</li>
+                      <li>Backend must have <code>TRADING212_ENV=demo</code> or <code>live</code> set</li>
+                    </ul>
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   className="btn btn-primary"
@@ -252,7 +287,7 @@ const ApiKeysPage: React.FC = () => {
                   <div key={key.id} className="api-key-card">
                     <div className="api-key-header">
                       <div>
-                        <h3>{key.label || key.exchange.toUpperCase()}</h3>
+                        <h3>{key.label || getExchangeDisplayName(key.exchange)}</h3>
                         <span
                           className={`status-badge ${
                             key.isActive ? "active" : "inactive"
@@ -270,8 +305,7 @@ const ApiKeysPage: React.FC = () => {
                     </div>
                     <div className="api-key-details">
                       <p>
-                        <strong>Exchange:</strong>{" "}
-                        {key.exchange === "binance" ? "Binance" : "Revolut X"}
+                        <strong>Exchange:</strong> {getExchangeDisplayName(key.exchange)}
                       </p>
                       <p>
                         <strong>Added:</strong>{" "}
@@ -360,10 +394,64 @@ openssl pkey -in revolutx-private.key -pubout -out revolutx-public.key
             <li>Paste API key and the full private key (PEM format) here</li>
           </ol>
         </div>
+
+        {/* NEW: Instructions – Trading212 */}
+        <div className="settings-section">
+          <h2>How to Get Trading212 API Keys</h2>
+          <ol className="instructions-list">
+            <li>
+              <strong>For Demo Account (Recommended for testing):</strong>
+              <ul style={{ marginTop: '10px' }}>
+                <li>
+                  Log in to{" "}
+                  <a
+                    href="https://demo.trading212.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Trading212 Demo
+                  </a>
+                </li>
+                <li>Go to <strong>Settings → API (Beta)</strong></li>
+                <li>Click <strong>Generate API Key</strong></li>
+                <li>Copy both the <strong>API Key</strong> and <strong>API Secret</strong></li>
+                <li>Paste them in the form above</li>
+                <li>Make sure your backend has <code>TRADING212_ENV=demo</code></li>
+              </ul>
+            </li>
+            <li style={{ marginTop: '20px' }}>
+              <strong>For Live Account (Real trading):</strong>
+              <ul style={{ marginTop: '10px' }}>
+                <li>
+                  Log in to{" "}
+                  <a
+                    href="https://www.trading212.com/en/login"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Trading212 Live
+                  </a>
+                </li>
+                <li>Go to <strong>Settings → API (Beta)</strong></li>
+                <li>Click <strong>Generate API Key</strong></li>
+                <li>Copy both the <strong>API Key</strong> and <strong>API Secret</strong></li>
+                <li>Paste them in the form above</li>
+                <li>Make sure your backend has <code>TRADING212_ENV=live</code></li>
+              </ul>
+            </li>
+            <li style={{ marginTop: '20px' }}>
+              <strong>🔒 Security:</strong>
+              <ul style={{ marginTop: '10px' }}>
+                <li>Trading212 API keys are <strong>read-only</strong> by default</li>
+                <li>They cannot place orders or withdraw funds</li>
+                <li>Keys are encrypted before storage</li>
+              </ul>
+            </li>
+          </ol>
+        </div>
       </div>
     </Layout>
   );
 };
 
 export default ApiKeysPage;
-
